@@ -1,0 +1,52 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "starttest": "tsc && node dist/server.js",
+    "start": "node dist/server.js",
+    "dev": "ts-node-dev src/server.ts",
+    "build": "tsc",
+    "render-build": "npm install && npm run build",
+    "render-start": "node --max-old-space-size=256 dist/server.js",
+    "migrate:up": "ts-node src/migrations/run-migration.ts up",
+    "migrate:down": "ts-node src/migrations/run-migration.ts down",
+    "deploy:staging": "bash scripts/deploy-staging.sh",
+    "deploy:production": "bash scripts/deploy-production.sh",
+    "rollback:production": "bash scripts/rollback-production.sh",
+    "monitor:production": "bash scripts/monitor-production.sh"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@types/cookie-parser": "^1.4.8",
+    "bcryptjs": "^2.4.3",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "csvtojson": "^2.0.10",
+    "dayjs": "^1.11.13",
+    "dotenv": "^16.4.7",
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongodb": "^6.15.0",
+    "mongoose": "^8.16.1",
+    "multer": "^2.0.1",
+    "nodemon": "^3.1.9",
+    "reflect-metadata": "^0.2.2",
+    "telegraf": "^4.16.3",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/jsonwebtoken": "^9.0.9",
+    "@types/multer": "^1.4.13",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.8.3"
+  }
+}
