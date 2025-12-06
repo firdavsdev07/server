@@ -731,6 +731,9 @@ class PaymentService {
             productName: contract.productName || "Mahsulot",
             amount: payment.actualAmount || payment.amount,
             status: payment.status,
+            paymentType: payment.status === 'PAID' ? 'FULL' : (payment.status === 'OVERPAID' ? 'EXCESS' : 'PARTIAL'),
+            monthNumber: payment.targetMonth,
+            currencyDetails: { dollar: payment.amount, sum: 0 },
           });
           
           logger.info("✅ Database notification created for payment approval");
@@ -833,6 +836,9 @@ class PaymentService {
             productName: contract.productName || "Mahsulot",
             amount: payment.actualAmount || payment.amount,
             status: payment.status,
+            paymentType: 'PARTIAL', // Rad qilingan to'lovlar odatda partial
+            monthNumber: payment.targetMonth,
+            currencyDetails: undefined, // Rad qilinganda currency details kerak emas
           });
           
           logger.info("✅ Database notification created for payment rejection");

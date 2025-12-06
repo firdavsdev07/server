@@ -14,6 +14,8 @@ export interface INotification extends Document {
     productName: string;
     amount: number;
     status: string;
+    paymentType?: 'FULL' | 'PARTIAL' | 'EXCESS'; // To'lov turi
+    monthNumber?: number; // Qaysi oy uchun to'lov
   };
   isRead: boolean;
   createdAt: Date;
@@ -72,6 +74,15 @@ const notificationSchema = new Schema<INotification>(
       status: {
         type: String,
         required: true,
+      },
+      paymentType: {
+        type: String,
+        enum: ['FULL', 'PARTIAL', 'EXCESS'],
+        required: false,
+      },
+      monthNumber: {
+        type: Number,
+        required: false,
       },
     },
     isRead: {

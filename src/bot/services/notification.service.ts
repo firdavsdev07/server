@@ -16,6 +16,9 @@ class NotificationService {
     productName: string;
     amount: number;
     status: string;
+    paymentType?: 'FULL' | 'PARTIAL' | 'EXCESS';
+    monthNumber?: number;
+    currencyDetails?: { dollar: number; sum: number };
   }) {
     try {
       const title =
@@ -23,10 +26,44 @@ class NotificationService {
           ? "✅ To'lov tasdiqlandi"
           : "❌ To'lov rad qilindi";
 
+      // Aralash to'lov ma'lumotini formatlash
+      const formatPaymentDetails = (amount: number, status: string, currencyDetails?: { dollar: number; sum: number }, paymentType?: string, monthNumber?: number) => {
+        let paymentInfo = '';
+        
+        // Currency details bilan format
+        if (currencyDetails && (currencyDetails.dollar > 0 || currencyDetails.sum > 0)) {
+          if (currencyDetails.dollar > 0 && currencyDetails.sum > 0) {
+            paymentInfo = `$${currencyDetails.dollar.toFixed(2)} + ${currencyDetails.sum.toLocaleString()} so'm (jami: $${amount.toFixed(2)})`;
+          } else if (currencyDetails.dollar > 0) {
+            paymentInfo = `$${currencyDetails.dollar.toFixed(2)}`;
+          } else {
+            paymentInfo = `${currencyDetails.sum.toLocaleString()} so'm ($${amount.toFixed(2)} ekvivalent)`;
+          }
+        } else {
+          paymentInfo = `$${amount.toFixed(2)}`;
+        }
+
+        // Status qo'shish
+        if (status === 'OVERPAID') {
+          paymentInfo += ' (ko\'p to\'lov)';
+        } else if (status === 'UNDERPAID') {
+          paymentInfo += ' (kam to\'lov)';
+        }
+
+        // Oy raqami qo'shish
+        if (monthNumber) {
+          paymentInfo += ` - ${monthNumber}-oy uchun`;
+        }
+
+        return paymentInfo;
+      };
+
+      const paymentDetails = formatPaymentDetails(data.amount, data.status, data.currencyDetails, data.paymentType, data.monthNumber);
+
       const message =
         data.type === "PAYMENT_APPROVED"
-          ? `${data.customerName} - ${data.productName} uchun $${data.amount} to'lov tasdiqlandi.`
-          : `${data.customerName} - ${data.productName} uchun $${data.amount} to'lov rad qilindi.`;
+          ? `${data.customerName} mijozning ${data.productName} mahsuloti uchun ${paymentDetails} to'lovi tasdiqlandi.`
+          : `${data.customerName} mijozning ${data.productName} mahsuloti uchun ${paymentDetails} to'lovi rad qilindi.`;
 
       const notification = await Notification.create({
         managerId: new Types.ObjectId(data.managerId),
@@ -41,6 +78,8 @@ class NotificationService {
           productName: data.productName,
           amount: data.amount,
           status: data.status,
+          paymentType: data.paymentType,
+          monthNumber: data.monthNumber,
         },
         isRead: false,
       });
