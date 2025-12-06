@@ -110,7 +110,9 @@ class ContractService {
     }
 
     balance.dollar += changes.dollar || 0;
-    balance.sum += changes.sum || 0;
+    if (balance.sum !== undefined && changes.sum !== undefined) {
+      balance.sum += changes.sum;
+    }
 
     return await balance.save();
   }

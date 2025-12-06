@@ -106,7 +106,7 @@ class EmployeeService {
             sum: {
               $round: {
                 $multiply: [
-                  { $ifNull: ["$balance.dollar", 0] }, // ✅ Null bo'lsa 0
+                  { $ifNull: ["$balance.dollar", 0] },
                   "$exchangeRate"
                 ],
               },
@@ -312,17 +312,28 @@ class EmployeeService {
         sum: balance.sum,
       });
 
-      // 1. Balansni tekshirish - yetarli pul bormi?
+      // 1. So'm summasini dollarga o'girish
       const changes = data.currencyDetails;
-      logger.debug("💵 Requested withdrawal:", {
-        dollar: changes.dollar,
+      const Currency = await import("../../schemas/currency.schema");
+      const currency = await Currency.default.findOne().sort({ createdAt: -1 });
+      const exchangeRate = currency?.amount || 12500;
+      
+      const sumInDollars = changes.sum ? changes.sum / exchangeRate : 0;
+      const totalDollarsToWithdraw = (changes.dollar || 0) + sumInDollars;
+      
+      logger.debug("💵 Withdrawal calculation:", {
+        requestedDollar: changes.dollar || 0,
+        requestedSum: changes.sum || 0,
+        exchangeRate: exchangeRate,
+        sumInDollars: sumInDollars,
+        totalDollarsToWithdraw: totalDollarsToWithdraw
       });
 
-      // ✅ Faqat dollar tekshirish (sum o'chirildi)
-      if (balance.dollar < changes.dollar) {
+      // Faqat dollar balansni tekshirish
+      if (balance.dollar < totalDollarsToWithdraw) {
         logger.error("❌ Insufficient dollar balance");
         throw BaseError.BadRequest(
-          `Balansda yetarli dollar yo'q. Mavjud: ${balance.dollar}, Kerak: ${changes.dollar}`
+          `Balansda yetarli dollar yo'q. Mavjud: ${balance.dollar}$, Kerak: ${totalDollarsToWithdraw.toFixed(2)}$ (${changes.dollar || 0}$ + ${changes.sum || 0} so'm)`
         );
       }
 
@@ -331,18 +342,18 @@ class EmployeeService {
       const { Expenses } = await import("../../schemas/expenses.schema");
       const expense = await Expenses.create({
         managerId: employeeExist._id,
-        dollar: changes.dollar || 0,
-        sum: 0, // ✅ Sum yechish o'chirildi
+        dollar: totalDollarsToWithdraw,
+        sum: 0, // Database'da faqat dollarda saqlaymiz
         isActive: true,
-        notes: data.notes || "Balansdan pul yechib olindi",
+        notes: data.notes || `Balansdan pul yechib olindi: ${changes.dollar || 0}$ + ${changes.sum || 0} so'm = ${totalDollarsToWithdraw.toFixed(2)}$`,
       });
 
       logger.debug("✅ Expense created:", expense._id);
 
-      // 3. Balansni kamaytirish
+      // 3. Balansni kamaytirish (faqat dollar)
       logger.debug("💳 Updating balance...");
-      balance.dollar -= changes.dollar;
-      // ✅ Sum o'chirildi, faqat dollar ayriladi
+      balance.dollar -= totalDollarsToWithdraw;
+      // balance.sum ni o'zgartirmaymiz chunki u mavjud emas
       await balance.save();
 
       logger.debug("✅ Balance updated successfully:", {

@@ -29,7 +29,9 @@ export class ContractBalanceHelper {
         logger.debug("✅ New balance created:", balance._id);
       } else {
         balance.dollar += changes.dollar || 0;
-        balance.sum += changes.sum || 0;
+        if (balance.sum !== undefined && changes.sum !== undefined) {
+          balance.sum += changes.sum;
+        }
         await balance.save();
         logger.debug("✅ Balance updated:", balance._id);
       }
@@ -58,7 +60,9 @@ export class ContractBalanceHelper {
       }
 
       balance.dollar -= changes.dollar || 0;
-      balance.sum -= changes.sum || 0;
+      if (balance.sum !== undefined && changes.sum !== undefined) {
+        balance.sum -= changes.sum;
+      }
       await balance.save();
 
       logger.debug("✅ Balance reverted:", balance._id);

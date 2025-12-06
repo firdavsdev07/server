@@ -400,7 +400,10 @@ class DashboardService {
       createdAt: -1,
     });
 
-    return currencyCourse?.amount;
+    return {
+      course: currencyCourse?.amount, // Faqat database'dagi kurs
+      message: "success"
+    };
   }
   async changeCurrency(amount: number) {
     await Currency.findOneAndUpdate(

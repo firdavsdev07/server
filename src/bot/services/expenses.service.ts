@@ -22,7 +22,9 @@ class ExpensesSrvice {
     }
 
     balance.dollar -= changes.dollar;
-    balance.sum -= changes.sum;
+    if (balance.sum !== undefined && changes.sum !== undefined) {
+      balance.sum -= changes.sum;
+    }
 
     return await balance.save();
   }
