@@ -106,7 +106,10 @@ class DashboardSrvice {
       createdAt: -1,
     });
 
-    return currencyCourse?.amount;
+    return {
+      course: currencyCourse?.amount,
+      message: "success"
+    };
   }
 }
 
