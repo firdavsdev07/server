@@ -349,7 +349,7 @@ class PaymentService {
       }
 
       const notes = await Notes.create({
-        text: noteText,
+        text: noteText || "To'lov amalga oshirildi", // Default text agar notes bo'sh bo'lsa
         customer: contract.customer,
         createBy: user.sub,
       });

@@ -52,7 +52,7 @@ class PaymentService {
     }
 
     const notes = new Notes({
-      text: payData.notes,
+      text: payData.notes || "To'lov amalga oshirildi", // Default text agar notes bo'sh bo'lsa
       customer,
       createBy: manager,
     });
@@ -166,7 +166,7 @@ class PaymentService {
     }
 
     const notes = new Notes({
-      text: payData.notes,
+      text: payData.notes || "To'lov amalga oshirildi", // Default text agar notes bo'sh bo'lsa
       customer: customer,
       createBy: manager,
     });
