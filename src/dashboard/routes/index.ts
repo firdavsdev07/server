@@ -12,6 +12,7 @@ import expenseRoute from "./expenses.routes";
 import fileRoute from "./file.routes";
 import excelImportRoute from "./excel-import.routes";
 import resetRoute from "./reset.routes";
+import auditLogRoute from "./audit-log.routes";
 
 const routes = Router();
 
@@ -27,5 +28,6 @@ routes.use("/expense", expenseRoute);
 routes.use("/file", fileRoute);
 routes.use("/excel", excelImportRoute);
 routes.use("/reset", resetRoute);
+routes.use("/audit", auditLogRoute);
 
 export default routes;

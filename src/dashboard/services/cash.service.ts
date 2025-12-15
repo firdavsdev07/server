@@ -3,6 +3,7 @@ import BaseError from "../../utils/base.error";
 import Payment, { PaymentStatus } from "../../schemas/payment.schema";
 import paymentService from "./payment.service";
 import IJwtUser from "../../types/user";
+import auditLogService from "../../services/audit-log.service";
 
 class CashService {
   /**

@@ -677,6 +677,32 @@ class PaymentService {
       await contract.save();
       logger.debug("💾 Contract saved with updated nextPaymentDate");
 
+      // ✅ AUDIT LOG: To'lov tasdiqlash
+      try {
+        const auditLogService = (await import("../../services/audit-log.service")).default;
+        const { AuditAction, AuditEntity } = await import("../../schemas/audit-log.schema");
+        await auditLogService.createLog({
+          action: AuditAction.PAYMENT_CONFIRMED,
+          entity: AuditEntity.PAYMENT,
+          entityId: paymentId,
+          userId: user.sub,
+          changes: [
+            { field: "status", oldValue: "PENDING", newValue: payment.status },
+            { field: "isPaid", oldValue: false, newValue: payment.isPaid },
+            { field: "confirmedBy", oldValue: null, newValue: user.sub },
+            { field: "confirmedAt", oldValue: null, newValue: payment.confirmedAt }
+          ],
+          metadata: {
+            paymentType: "monthly",
+            paymentStatus: payment.status,
+            amount: payment.actualAmount || payment.amount
+          }
+        });
+        logger.debug("✅ Audit log created for payment confirmation");
+      } catch (auditError) {
+        logger.error("❌ Error creating audit log:", auditError);
+      }
+
       // ✅ VERIFY: Database'dan qayta o'qib tekshirish
       const verifyContract = await Contract.findById(contract._id).select(
         "nextPaymentDate previousPaymentDate"

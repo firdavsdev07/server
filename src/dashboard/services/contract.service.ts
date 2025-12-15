@@ -6,6 +6,7 @@
 import BaseError from "../../utils/base.error";
 import Contract, { ContractStatus } from "../../schemas/contract.schema";
 import logger from "../../utils/logger";
+import auditLogService from "../../services/audit-log.service";
 import {
   CreateContractDto,
   UpdateContractDto,
@@ -253,6 +254,17 @@ class ContractService {
 
       await contract.save();
       logger.debug("📋 Contract created:", contract._id);
+
+      // 🔍 AUDIT LOG: Contract yaratish
+      const customerData = customerDoc as any;
+      await auditLogService.logContractCreate(
+        contract._id.toString(),
+        customerData._id.toString(),
+        `${customerData.firstName} ${customerData.lastName}`,
+        data.productName,
+        data.totalPrice,
+        user.sub
+      );
 
       // 5. Create initial payment (if exists) - DELEGATED
       if (initialPayment && initialPayment > 0) {

@@ -13,6 +13,7 @@ import Auth from "../../schemas/auth.schema";
 import { Balance } from "../../schemas/balance.schema";
 import BaseError from "../../utils/base.error";
 import { Types } from "mongoose";
+import auditLogService from "../../services/audit-log.service";
 
 dayjs.extend(customParseFormat);
 
@@ -249,6 +250,14 @@ class ExcelImportService {
       });
 
       logger.debug(`✅ Created new customer: ${firstName} ${lastName}`);
+      
+      // 🔍 AUDIT LOG: Customer yaratish
+      await auditLogService.logCustomerCreate(
+        customer._id.toString(),
+        `${firstName} ${lastName}`,
+        managerId.toString(),
+        { source: "excel_import" }
+      );
     } else {
       logger.debug(`✓ Found existing customer: ${firstName} ${lastName}`);
     }
@@ -618,6 +627,19 @@ class ExcelImportService {
 
       paymentIds.push(paymentDoc._id);
 
+      // 🔍 AUDIT LOG: Payment yaratish
+      await auditLogService.logPaymentCreate(
+        paymentDoc._id.toString(),
+        contractId.toString(),
+        customerId.toString(),
+        "Customer Name", // Bu yerda customer nomini olish kerak
+        monthPayment.paidAmount,
+        "monthly",
+        monthPayment.monthIndex,
+        managerId.toString(),
+        { source: "excel_import" }
+      );
+
       logger.debug(
         `  ✓ Payment created: ${monthPayment.monthIndex}-oy - ${monthPayment.paidAmount.toFixed(2)}$ (${monthPayment.status})`
       );
@@ -775,6 +797,18 @@ class ExcelImportService {
 
         logger.debug(`  ✓ Contract created: ${contract._id}`);
 
+        // 🔍 AUDIT LOG: Contract yaratish
+        const customerFullName = `${contractData.productName}`;
+        await auditLogService.logContractCreate(
+          contract._id.toString(),
+          customerId.toString(),
+          customerFullName,
+          contractData.productName,
+          contractData.totalPrice,
+          managerId.toString(),
+          { source: "excel_import" }
+        );
+
         // 5. Oylik to'lovlarni parse qilish va yaratish
         const monthlyPayments = this.parseMonthlyPayments(
           row,
@@ -904,6 +938,35 @@ class ExcelImportService {
     logger.debug("\n=== EXCEL IMPORT COMPLETED ===");
     logger.debug(`Success: ${successCount}`);
     logger.debug(`Failed: ${failedCount}`);
+
+    // 🔍 AUDIT LOG: Excel import yakunlandi
+    const fileName = filePath.split('/').pop() || 'unknown.xlsx';
+    const totalRows = rows.length;
+    
+    // Affected entities ni yig'ish (bu yerda oddiy hisobot)
+    const affectedEntities: {
+      entityType: string;
+      entityId: string;
+      entityName: string;
+    }[] = [];
+    
+    // Success entities qo'shish
+    for (let i = 0; i < successCount; i++) {
+      affectedEntities.push({
+        entityType: "contract",
+        entityId: `import-${i}`,
+        entityName: `Import ${i + 1}`,
+      });
+    }
+
+    await auditLogService.logExcelImport(
+      fileName,
+      totalRows,
+      successCount,
+      failedCount,
+      managerId,
+      affectedEntities
+    );
 
     return {
       success: successCount,

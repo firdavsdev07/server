@@ -2,6 +2,7 @@ import BaseError from "../../utils/base.error";
 import Auth from "../../schemas/auth.schema";
 import Customer, { ICustomer } from "../../schemas/customer.schema";
 import logger from "../../utils/logger";
+import auditLogService from "../../services/audit-log.service";
 import {
   CreateCustomerDto,
   SellerCreateCustomerDto,
@@ -275,6 +276,14 @@ class CustomerService {
       files: customerFiles,
     });
     await customer.save();
+    
+    // 🔍 AUDIT LOG: Customer yaratish
+    await auditLogService.logCustomerCreate(
+      customer._id.toString(),
+      `${data.firstName} ${data.lastName}`,
+      user.sub
+    );
+    
     return { message: "Mijoz yaratildi.", customer };
   }
 
@@ -417,6 +426,14 @@ class CustomerService {
         editedBy: user.sub,
         changesCount: changes.length,
       });
+
+      // 🔍 AUDIT LOG: Customer tahrirlash
+      await auditLogService.logCustomerUpdate(
+        customer._id.toString(),
+        `${customer.firstName} ${customer.lastName}`,
+        changes,
+        user.sub
+      );
     }
 
     await Customer.findOneAndUpdate(
