@@ -358,7 +358,7 @@ class AuditLogService {
         $lte: endOfDay,
       },
     })
-    .populate("userId", "firstName lastName role -_id")
+    .populate("userId", "firstName lastName role")
     .sort({ timestamp: -1 })
     .lean();
 
@@ -373,7 +373,7 @@ class AuditLogService {
       entity: entityType,
       entityId,
     })
-    .populate("userId", "firstName lastName role -_id")
+    .populate("userId", "firstName lastName role")
     .sort({ timestamp: -1 })
     .lean();
 
@@ -387,7 +387,7 @@ class AuditLogService {
     const activity = await AuditLog.find({
       userId: new Types.ObjectId(userId),
     })
-    .populate("userId", "firstName lastName role -_id")
+    .populate("userId", "firstName lastName role")
     .sort({ timestamp: -1 })
     .limit(limit)
     .lean();

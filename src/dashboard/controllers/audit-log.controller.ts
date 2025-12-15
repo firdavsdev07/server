@@ -223,7 +223,7 @@ class AuditLogController {
       
       const [activities, total] = await Promise.all([
         AuditLog.find(query)
-          .populate("userId", "firstName lastName role -_id")
+          .populate("userId", "firstName lastName role")
           .sort({ timestamp: -1 })
           .limit(limitNum)
           .skip(skip)
