@@ -681,6 +681,15 @@ class PaymentService {
       try {
         const auditLogService = (await import("../../services/audit-log.service")).default;
         const { AuditAction, AuditEntity } = await import("../../schemas/audit-log.schema");
+        
+        logger.debug("🔍 Creating audit log with data:", {
+          action: AuditAction.PAYMENT_CONFIRMED,
+          entity: AuditEntity.PAYMENT,
+          entityId: paymentId,
+          userId: user.sub,
+          userInfo: { name: user.name, role: user.role }
+        });
+        
         await auditLogService.createLog({
           action: AuditAction.PAYMENT_CONFIRMED,
           entity: AuditEntity.PAYMENT,
@@ -701,6 +710,12 @@ class PaymentService {
         logger.debug("✅ Audit log created for payment confirmation");
       } catch (auditError) {
         logger.error("❌ Error creating audit log:", auditError);
+        logger.error("❌ Audit error details:", {
+          message: (auditError as Error).message,
+          stack: (auditError as Error).stack,
+          userId: user.sub,
+          paymentId
+        });
       }
 
       // ✅ VERIFY: Database'dan qayta o'qib tekshirish
@@ -1452,6 +1467,50 @@ class PaymentService {
 
       // await session.commitTransaction();
       logger.debug("✅ payByContract completed successfully (NO TRANSACTION - DEV MODE)");
+
+      // ✅ AUDIT LOG: To'lov yaratish (har bir yaratilgan to'lov uchun)
+      try {
+        const auditLogService = (await import("../../services/audit-log.service")).default;
+        const { AuditAction, AuditEntity } = await import("../../schemas/audit-log.schema");
+        
+        // Har bir yaratilgan to'lov uchun audit log yozish
+        for (const payment of createdPayments) {
+          await auditLogService.createLog({
+            action: AuditAction.PAYMENT,
+            entity: AuditEntity.PAYMENT,
+            entityId: payment._id.toString(),
+            userId: user.sub,
+            metadata: {
+              paymentType: "monthly",
+              paymentStatus: payment.status,
+              amount: payment.actualAmount || payment.amount,
+              targetMonth: payment.targetMonth,
+              affectedEntities: [
+                {
+                  entityType: "contract",
+                  entityId: contract._id.toString(),
+                  entityName: contract.productName || "Contract",
+                },
+                {
+                  entityType: "customer",
+                  entityId: contract.customer._id?.toString() || contract.customer.toString(),
+                  entityName: `${contract.customer.firstName || ""} ${contract.customer.lastName || ""}`.trim(),
+                }
+              ]
+            }
+          });
+        }
+        
+        logger.debug(`✅ Audit log created for ${createdPayments.length} payment(s)`);
+      } catch (auditError) {
+        logger.error("❌ Error creating audit log:", auditError);
+        logger.error("❌ Audit error details:", {
+          message: (auditError as Error).message,
+          stack: (auditError as Error).stack,
+          userId: user.sub,
+          contractId: contract._id
+        });
+      }
 
       // ✅ Response'da to'lov holati haqida ma'lumot qaytarish
       const lastPayment = createdPayments[createdPayments.length - 1];

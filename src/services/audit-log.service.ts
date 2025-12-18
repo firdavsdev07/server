@@ -22,15 +22,37 @@ class AuditLogService {
     userAgent?: string;
   }): Promise<void> {
     try {
-      await AuditLog.create({
+      logger.debug("🔍 AuditLogService.createLog called with data:", {
+        action: data.action,
+        entity: data.entity,
+        entityId: data.entityId,
+        userId: data.userId,
+        userType: data.userType || "employee",
+        changesCount: data.changes?.length || 0,
+        hasMetadata: !!data.metadata
+      });
+
+      const auditLogData = {
         ...data,
         userType: data.userType || "employee",
         timestamp: new Date(),
-      });
+      };
 
-      logger.debug(`📝 Audit log created: ${data.action} ${data.entity} by ${data.userId}`);
+      logger.debug("🔍 Creating audit log with final data:", auditLogData);
+
+      const result = await AuditLog.create(auditLogData);
+      
+      logger.debug(`📝 Audit log created successfully: ${data.action} ${data.entity} by ${data.userId}`, {
+        auditLogId: result._id,
+        timestamp: result.timestamp
+      });
     } catch (error) {
       logger.error("❌ Error creating audit log:", error);
+      logger.error("❌ Audit log error details:", {
+        message: (error as Error).message,
+        stack: (error as Error).stack,
+        inputData: data
+      });
       // Audit log xatosi asosiy jarayonni to'xtatmasligi kerak
     }
   }
