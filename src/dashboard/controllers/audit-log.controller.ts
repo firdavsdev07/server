@@ -21,7 +21,16 @@ class AuditLogController {
 
       // Date parametrini parse qilish
       const dateParam = req.query.date as string;
-      const selectedDate = dateParam ? new Date(dateParam) : new Date();
+      
+      // ✅ TIMEZONE FIX: YYYY-MM-DD ni local midnight ga o'tkazish
+      let selectedDate: Date;
+      if (dateParam) {
+        // dateParam format: "2024-12-18"
+        const [year, month, day] = dateParam.split('-').map(Number);
+        selectedDate = new Date(year, month - 1, day, 0, 0, 0, 0);
+      } else {
+        selectedDate = new Date();
+      }
       
       if (isNaN(selectedDate.getTime())) {
         return next(BaseError.BadRequest("Noto'g'ri sana formati"));
@@ -188,10 +197,10 @@ class AuditLogController {
       let endDate: Date | undefined;
       
       if (date) {
-        startDate = new Date(date);
-        startDate.setHours(0, 0, 0, 0);
-        endDate = new Date(date);
-        endDate.setHours(23, 59, 59, 999);
+        // ✅ TIMEZONE FIX: YYYY-MM-DD ni local midnight ga o'tkazish
+        const [year, month, day] = date.split('-').map(Number);
+        startDate = new Date(year, month - 1, day, 0, 0, 0, 0);
+        endDate = new Date(year, month - 1, day, 23, 59, 59, 999);
       }
 
       // Query building
