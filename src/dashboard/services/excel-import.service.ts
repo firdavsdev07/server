@@ -252,12 +252,17 @@ class ExcelImportService {
       logger.debug(`✅ Created new customer: ${firstName} ${lastName}`);
       
       // 🔍 AUDIT LOG: Customer yaratish
-      await auditLogService.logCustomerCreate(
-        customer._id.toString(),
-        `${firstName} ${lastName}`,
-        managerId.toString(),
-        { source: "excel_import" }
-      );
+      try {
+        await auditLogService.logCustomerCreate(
+          customer._id.toString(),
+          `${firstName} ${lastName}`,
+          managerId.toString(),
+          { source: "excel_import", fileName: "excel_import" }
+        );
+        logger.debug(`✅ Customer audit log created: ${customer._id}`);
+      } catch (auditError) {
+        logger.error("❌ Error creating customer audit log:", auditError);
+      }
     } else {
       logger.debug(`✓ Found existing customer: ${firstName} ${lastName}`);
     }
@@ -628,17 +633,28 @@ class ExcelImportService {
       paymentIds.push(paymentDoc._id);
 
       // 🔍 AUDIT LOG: Payment yaratish
-      await auditLogService.logPaymentCreate(
-        paymentDoc._id.toString(),
-        contractId.toString(),
-        customerId.toString(),
-        "Customer Name", // Bu yerda customer nomini olish kerak
-        monthPayment.paidAmount,
-        "monthly",
-        monthPayment.monthIndex,
-        managerId.toString(),
-        { source: "excel_import" }
-      );
+      try {
+        await auditLogService.logPaymentCreate(
+          paymentDoc._id.toString(),
+          contractId.toString(),
+          customerId.toString(),
+          "Customer Name", // Bu yerda customer nomini olish kerak
+          monthPayment.paidAmount,
+          "monthly",
+          monthPayment.monthIndex,
+          managerId.toString(),
+          { 
+            source: "excel_import",
+            fileName: "excel_import",
+            actualAmount: monthPayment.paidAmount,
+            expectedAmount: monthPayment.paidAmount,
+            paymentStatus: "PAID"
+          }
+        );
+        logger.debug(`✅ Payment audit log created: ${paymentDoc._id}`);
+      } catch (auditError) {
+        logger.error("❌ Error creating payment audit log:", auditError);
+      }
 
       logger.debug(
         `  ✓ Payment created: ${monthPayment.monthIndex}-oy - ${monthPayment.paidAmount.toFixed(2)}$ (${monthPayment.status})`
@@ -798,16 +814,21 @@ class ExcelImportService {
         logger.debug(`  ✓ Contract created: ${contract._id}`);
 
         // 🔍 AUDIT LOG: Contract yaratish
-        const customerFullName = `${contractData.productName}`;
-        await auditLogService.logContractCreate(
-          contract._id.toString(),
-          customerId.toString(),
-          customerFullName,
-          contractData.productName,
-          contractData.totalPrice,
-          managerId.toString(),
-          { source: "excel_import" }
-        );
+        try {
+          const customerFullName = `${contractData.productName}`;
+          await auditLogService.logContractCreate(
+            contract._id.toString(),
+            customerId.toString(),
+            customerFullName,
+            contractData.productName,
+            contractData.totalPrice,
+            managerId.toString(),
+            { source: "excel_import", fileName: "excel_import" }
+          );
+          logger.debug(`✅ Contract audit log created: ${contract._id}`);
+        } catch (auditError) {
+          logger.error("❌ Error creating contract audit log:", auditError);
+        }
 
         // 5. Oylik to'lovlarni parse qilish va yaratish
         const monthlyPayments = this.parseMonthlyPayments(
@@ -959,14 +980,36 @@ class ExcelImportService {
       });
     }
 
-    await auditLogService.logExcelImport(
-      fileName,
-      totalRows,
-      successCount,
-      failedCount,
-      managerId,
-      affectedEntities
-    );
+    // 🔍 AUDIT LOG: Excel import yakunlandi
+    try {
+      logger.debug("📝 Creating Excel Import audit log...", {
+        fileName,
+        totalRows,
+        successCount,
+        failedCount,
+        managerId,
+        affectedEntitiesCount: affectedEntities.length
+      });
+      
+      await auditLogService.logExcelImport(
+        fileName,
+        totalRows,
+        successCount,
+        failedCount,
+        managerId,
+        affectedEntities
+      );
+      
+      logger.info("✅ Excel Import audit log created successfully");
+    } catch (auditError) {
+      logger.error("❌ Error creating Excel Import audit log:", auditError);
+      logger.error("❌ Audit error details:", {
+        message: (auditError as Error).message,
+        stack: (auditError as Error).stack,
+        fileName,
+        managerId
+      });
+    }
 
     return {
       success: successCount,
