@@ -22,12 +22,13 @@ class AuditLogController {
       // Date parametrini parse qilish
       const dateParam = req.query.date as string;
       
-      // ✅ TIMEZONE FIX: YYYY-MM-DD ni local midnight ga o'tkazish
+      // ✅ TIMEZONE FIX: O'zbekiston vaqt zonasi (UTC+5)
+      const { parseUzbekistanDate } = await import("../../utils/helpers/date.helper");
+      
       let selectedDate: Date;
       if (dateParam) {
         // dateParam format: "2024-12-18"
-        const [year, month, day] = dateParam.split('-').map(Number);
-        selectedDate = new Date(year, month - 1, day, 0, 0, 0, 0);
+        selectedDate = parseUzbekistanDate(dateParam);
       } else {
         selectedDate = new Date();
       }
@@ -197,10 +198,10 @@ class AuditLogController {
       let endDate: Date | undefined;
       
       if (date) {
-        // ✅ TIMEZONE FIX: YYYY-MM-DD ni local midnight ga o'tkazish
-        const [year, month, day] = date.split('-').map(Number);
-        startDate = new Date(year, month - 1, day, 0, 0, 0, 0);
-        endDate = new Date(year, month - 1, day, 23, 59, 59, 999);
+        // ✅ TIMEZONE FIX: O'zbekiston vaqt zonasi (UTC+5)
+        const { getUzbekistanDayStart, getUzbekistanDayEnd } = await import("../../utils/helpers/date.helper");
+        startDate = getUzbekistanDayStart(date);
+        endDate = getUzbekistanDayEnd(date);
       }
 
       // Query building
