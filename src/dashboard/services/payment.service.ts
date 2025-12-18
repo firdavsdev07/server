@@ -16,6 +16,19 @@ import Customer from "../../schemas/customer.schema";
 import logger from "../../utils/logger";
 import { withTransaction } from "../../utils/transaction.wrapper";
 import { RoleEnum } from "../../enums/role.enum";
+import { 
+  PAYMENT_CONSTANTS, 
+  calculatePaymentStatus,
+  calculatePaymentAmounts,
+  applyPrepaidBalance,
+  createPaymentNoteText,
+  createPaymentResponseMessage,
+  createRemainingPaymentNote,
+  createAutoRejectionNote,
+  PAYMENT_MESSAGES,
+  areAmountsEqual,
+  isAmountPositive,
+} from "../../utils/helpers/payment";
 
 interface PaymentDto {
   contractId: string;
@@ -88,7 +101,7 @@ class PaymentService {
   ): Promise<any[]> {
     const createdPayments: any[] = [];
     
-    if (excessAmount <= 0.01) {
+    if (!isAmountPositive(excessAmount)) {
       return createdPayments;
     }
 
@@ -125,12 +138,7 @@ class PaymentService {
         paymentAmount < monthlyPayment ? monthlyPayment - paymentAmount : 0;
 
       // Status aniqlash
-      let paymentStatus: PaymentStatus;
-      if (paymentAmount >= monthlyPayment - 0.01) {
-        paymentStatus = PaymentStatus.PAID;
-      } else {
-        paymentStatus = PaymentStatus.UNDERPAID;
-      }
+      const paymentStatus = calculatePaymentStatus(paymentAmount, monthlyPayment);
 
       // Notes yaratish
       const notes = await Notes.create({
@@ -182,7 +190,7 @@ class PaymentService {
     }
 
     // Agar hali ham ortiqcha summa qolsa, prepaidBalance ga qo'shish
-    if (remainingExcess > 0.01) {
+    if (isAmountPositive(remainingExcess)) {
       contract.prepaidBalance = (contract.prepaidBalance || 0) + remainingExcess;
       logger.debug(
         `💰 Prepaid balance updated: ${contract.prepaidBalance.toFixed(2)} $`
@@ -287,66 +295,44 @@ class PaymentService {
 
       // ✅ C2: Prepaid balance'dan avtomatik foydalanish
       const expectedAmount = contract.monthlyPayment;
-      let actualAmount = data.amount;
       const prepaidBalanceBefore = contract.prepaidBalance || 0;
-      let prepaidUsed = 0;
-
-      // Agar prepaid balance mavjud bo'lsa va to'lov kam bo'lsa
-      if (prepaidBalanceBefore > 0.01 && actualAmount < expectedAmount) {
-        const shortage = expectedAmount - actualAmount;
-        const canUsePrepaid = Math.min(shortage, prepaidBalanceBefore);
-        
-        actualAmount += canUsePrepaid;
-        prepaidUsed = canUsePrepaid;
-        
-        logger.debug(`💎 PREPAID BALANCE USED: ${canUsePrepaid.toFixed(2)} $ (balance: ${prepaidBalanceBefore.toFixed(2)} $)`);
+      
+      const { newActualAmount: actualAmount, prepaidUsed } = applyPrepaidBalance(
+        data.amount,
+        expectedAmount,
+        prepaidBalanceBefore
+      );
+      
+      if (isAmountPositive(prepaidUsed)) {
+        logger.debug(`💎 PREPAID BALANCE USED: ${prepaidUsed.toFixed(2)} $ (balance: ${prepaidBalanceBefore.toFixed(2)} $)`);
         logger.debug(`💵 Total amount after prepaid: ${actualAmount.toFixed(2)} $`);
       }
 
       // ✅ TO'LOV TAHLILI - Kam yoki ko'p to'langanini aniqlash
-      const difference = actualAmount - expectedAmount;
+      const { status: paymentStatus, remainingAmount, excessAmount } = calculatePaymentAmounts(
+        actualAmount,
+        expectedAmount
+      );
+      const prepaidAmount = excessAmount;
 
-      let paymentStatus = PaymentStatus.PAID;
-      let remainingAmount = 0;
-      let excessAmount = 0;
-      let prepaidAmount = 0;
-
-      // Kam to'langan (UNDERPAID)
-      if (difference < -0.01) {
-        paymentStatus = PaymentStatus.UNDERPAID;
-        remainingAmount = Math.abs(difference);
-        logger.debug(
-          `⚠️ UNDERPAID: ${remainingAmount.toFixed(2)} $ kam to'landi`
-        );
-      }
-      // Ko'p to'langan (OVERPAID)
-      else if (difference > 0.01) {
-        paymentStatus = PaymentStatus.OVERPAID;
-        excessAmount = difference;
-        prepaidAmount = difference;
+      // Logging
+      if (paymentStatus === PaymentStatus.UNDERPAID) {
+        logger.debug(`⚠️ UNDERPAID: ${remainingAmount.toFixed(2)} $ kam to'landi`);
+      } else if (paymentStatus === PaymentStatus.OVERPAID) {
         logger.debug(`✅ OVERPAID: ${excessAmount.toFixed(2)} $ ko'p to'landi`);
-      }
-      // To'g'ri to'langan (PAID)
-      else {
+      } else {
         logger.debug(`✓ EXACT PAYMENT: To'g'ri summa to'landi`);
       }
 
       // 1. Notes yaratish - to'lov holati haqida ma'lumot qo'shish
-      let noteText = data.notes || `To'lov: ${data.amount} $`;
-
-      // ✅ C2: Prepaid balance ishlatilganini ko'rsatish
-      if (prepaidUsed > 0.01) {
-        noteText += `\n💎 Prepaid balance ishlatildi: ${prepaidUsed.toFixed(2)} $`;
-        noteText += `\n💵 Jami: ${actualAmount.toFixed(2)} $`;
-      }
-
-      if (paymentStatus === PaymentStatus.UNDERPAID) {
-        noteText += `\n⚠️ Kam to'landi: ${remainingAmount.toFixed(2)} $ qoldi`;
-      } else if (paymentStatus === PaymentStatus.OVERPAID) {
-        noteText += `\n✅ Ko'p to'landi: ${excessAmount.toFixed(
-          2
-        )} $ ortiqcha (keyingi oyga o'tkaziladi)`;
-      }
+      const noteText = createPaymentNoteText({
+        amount: data.amount,
+        status: paymentStatus,
+        remainingAmount,
+        excessAmount,
+        prepaidUsed,
+        customNote: data.notes,
+      });
 
       const notes = await Notes.create({
         text: noteText || "To'lov amalga oshirildi", // Default text agar notes bo'sh bo'lsa
@@ -373,7 +359,7 @@ class PaymentService {
       });
 
       // ✅ C2: Prepaid balance'dan ayirish (faqat ishlatilgan bo'lsa)
-      if (prepaidUsed > 0.01) {
+      if (isAmountPositive(prepaidUsed)) {
         contract.prepaidBalance = prepaidBalanceBefore - prepaidUsed;
         await contract.save();
         logger.debug(`💎 Prepaid balance updated: ${prepaidBalanceBefore.toFixed(2)} → ${contract.prepaidBalance.toFixed(2)} $ (-${prepaidUsed.toFixed(2)} $)`);
@@ -417,22 +403,12 @@ class PaymentService {
       logger.debug("⏳ Will be confirmed or rejected by cash");
 
       // ✅ Response'da to'lov holati haqida ma'lumot qaytarish
-      let message = "To'lov muvaffaqiyatli qabul qilindi";
-      
-      // ✅ C2: Prepaid ishlatilganini ko'rsatish
-      if (prepaidUsed > 0.01) {
-        message += `\n💎 Prepaid balance ishlatildi: ${prepaidUsed.toFixed(2)} $`;
-      }
-      
-      if (paymentStatus === PaymentStatus.UNDERPAID) {
-        message = `To'lov qabul qilindi, lekin ${remainingAmount.toFixed(
-          2
-        )} $ kam to'landi`;
-      } else if (paymentStatus === PaymentStatus.OVERPAID) {
-        message = `To'lov qabul qilindi, ${excessAmount.toFixed(
-          2
-        )} $ ortiqcha summa keyingi oyga o'tkazildi`;
-      }
+      const message = createPaymentResponseMessage({
+        status: paymentStatus,
+        remainingAmount,
+        excessAmount,
+        prepaidUsed,
+      });
 
       return {
         status: "success",
@@ -456,10 +432,19 @@ class PaymentService {
 
   /**
    * To'lovni tasdiqlash (Kassa tomonidan)
-   * Requirements: 8.2, 8.3, 8.4
-   * ✅ ORTIQCHA TO'LOV BO'LSA, KEYINGI OYLAR UCHUN AVTOMATIK TO'LOVLAR YARATISH
+   * 
+   * @deprecated Use PaymentConfirmationService.confirmPayment() instead
+   * This method delegates to PaymentConfirmationService
    */
   async confirmPayment(paymentId: string, user: IJwtUser) {
+    const paymentConfirmationService = (await import("./payment/payment.confirmation.service")).default;
+    return paymentConfirmationService.confirmPayment(paymentId, user);
+  }
+
+  /**
+   * @deprecated OLD confirmPayment implementation - moved to PaymentConfirmationService
+   */
+  private async _oldConfirmPayment(paymentId: string, user: IJwtUser) {
     return withTransaction(async (session) => {
       logger.debug("✅ === CONFIRMING PAYMENT (WITH TRANSACTION SUPPORT) ===");
       logger.debug("Payment ID:", paymentId);
@@ -497,19 +482,14 @@ class PaymentService {
       });
 
       // Status aniqlash
-      if (Math.abs(difference) < 0.01) {
-        payment.status = PaymentStatus.PAID;
-        payment.remainingAmount = 0;
-        payment.excessAmount = 0;
-      } else if (difference < -0.01) {
-        payment.status = PaymentStatus.UNDERPAID;
-        payment.remainingAmount = Math.abs(difference);
-        payment.excessAmount = 0;
+      const paymentAmounts = calculatePaymentAmounts(actualAmount, expectedAmount);
+      payment.status = paymentAmounts.status;
+      payment.remainingAmount = paymentAmounts.remainingAmount;
+      payment.excessAmount = paymentAmounts.excessAmount;
+      
+      if (payment.status === PaymentStatus.UNDERPAID) {
         logger.debug(`⚠️ UNDERPAID: ${payment.remainingAmount.toFixed(2)}$ kam to'landi`);
-      } else {
-        payment.status = PaymentStatus.OVERPAID;
-        payment.excessAmount = difference;
-        payment.remainingAmount = 0;
+      } else if (payment.status === PaymentStatus.OVERPAID) {
         logger.debug(`✅ OVERPAID: ${payment.excessAmount.toFixed(2)}$ ortiqcha to'landi`);
       }
 
@@ -560,7 +540,7 @@ class PaymentService {
       // ✅ REFACTORED: Ortiqcha to'lovni qayta ishlash (DRY - takrorlanishni bartaraf etish)
       // processExcessPayment metodidan foydalanish
       const createdPayments = [];
-      if (payment.excessAmount && payment.excessAmount > 0.01) {
+      if (payment.excessAmount && isAmountPositive(payment.excessAmount)) {
         // ✅ TUZATISH: 4-oyning actualAmount'ini to'g'rilash
         // Ortiqcha summani ayirish kerak, chunki u keyingi oylarga o'tkaziladi
         const originalActualAmount = payment.actualAmount || payment.amount;
@@ -797,9 +777,19 @@ class PaymentService {
 
   /**
    * To'lovni rad etish (Kassa tomonidan)
-   * Requirements: 8.5
+   * 
+   * @deprecated Use PaymentConfirmationService.rejectPayment() instead
+   * This method delegates to PaymentConfirmationService
    */
   async rejectPayment(paymentId: string, reason: string, user: IJwtUser) {
+    const paymentConfirmationService = (await import("./payment/payment.confirmation.service")).default;
+    return paymentConfirmationService.rejectPayment(paymentId, reason, user);
+  }
+
+  /**
+   * @deprecated OLD rejectPayment implementation - moved to PaymentConfirmationService
+   */
+  private async _oldRejectPayment(paymentId: string, reason: string, user: IJwtUser) {
     return withTransaction(async (session) => {
       logger.debug("❌ === REJECTING PAYMENT (WITH TRANSACTION) ===");
       logger.debug("Payment ID:", paymentId);
@@ -899,11 +889,9 @@ class PaymentService {
 
   /**
    * To'lovlar tarixini olish
-   * Requirements: 7.1, 7.2, C3 - Filter support
    * 
-   * @param customerId - Mijoz ID
-   * @param contractId - Shartnoma ID
-   * @param filters - Qo'shimcha filterlar (status, paymentType, dateRange)
+   * @deprecated Use PaymentQueryService.getPaymentHistory() instead
+   * This method delegates to PaymentQueryService
    */
   async getPaymentHistory(
     customerId?: string,
@@ -916,138 +904,8 @@ class PaymentService {
       isPaid?: boolean;
     }
   ) {
-    try {
-      logger.debug("📜 Getting payment history for:", {
-        customerId,
-        contractId,
-        filters,
-      });
-
-      // ✅ C3: Flexible filtering - faqat isPaid emas, status ham
-      let matchCondition: any = {};
-
-      // Default: faqat to'langan to'lovlar (agar filter berilmasa)
-      if (filters?.isPaid !== undefined) {
-        matchCondition.isPaid = filters.isPaid;
-      } else if (!filters?.status) {
-        // Agar status filter yo'q bo'lsa, default isPaid: true
-        matchCondition.isPaid = true;
-      }
-
-      // ✅ C3: Status filter - PENDING, PAID, UNDERPAID, OVERPAID, REJECTED
-      if (filters?.status && filters.status.length > 0) {
-        matchCondition.status = { $in: filters.status };
-      }
-
-      // ✅ C3: Payment type filter - MONTHLY, INITIAL, EXTRA
-      if (filters?.paymentType && filters.paymentType.length > 0) {
-        matchCondition.paymentType = { $in: filters.paymentType };
-      }
-
-      // ✅ C3: Date range filter
-      if (filters?.dateFrom || filters?.dateTo) {
-        matchCondition.date = {};
-        if (filters.dateFrom) {
-          matchCondition.date.$gte = filters.dateFrom;
-        }
-        if (filters.dateTo) {
-          matchCondition.date.$lte = filters.dateTo;
-        }
-      }
-
-      if (customerId) {
-        matchCondition.customerId = new Types.ObjectId(customerId);
-      }
-
-      if (contractId) {
-        const contract = await Contract.findById(contractId);
-        if (contract) {
-          matchCondition.customerId = new Types.ObjectId(
-            contract.customer.toString()
-          );
-        }
-      }
-
-      const payments = await Payment.aggregate([
-        { $match: matchCondition },
-        {
-          $lookup: {
-            from: "customers",
-            localField: "customerId",
-            foreignField: "_id",
-            as: "customer",
-          },
-        },
-        { $unwind: "$customer" },
-        {
-          $lookup: {
-            from: "employees",
-            localField: "managerId",
-            foreignField: "_id",
-            as: "manager",
-          },
-        },
-        { $unwind: "$manager" },
-        {
-          $lookup: {
-            from: "notes",
-            localField: "notes",
-            foreignField: "_id",
-            as: "notes",
-          },
-        },
-        {
-          $addFields: {
-            customerName: {
-              $concat: [
-                "$customer.firstName",
-                " ",
-                { $ifNull: ["$customer.lastName", ""] },
-              ],
-            },
-            managerName: {
-              $concat: [
-                "$manager.firstName",
-                " ",
-                { $ifNull: ["$manager.lastName", ""] },
-              ],
-            },
-            notes: { $ifNull: [{ $arrayElemAt: ["$notes.text", 0] }, ""] },
-          },
-        },
-        {
-          $project: {
-            _id: 1,
-            amount: 1,
-            date: 1,
-            paymentType: 1,
-            customerName: 1,
-            managerName: 1,
-            notes: 1,
-            status: 1,
-            actualAmount: 1,
-            expectedAmount: 1,
-            remainingAmount: 1,
-            excessAmount: 1,
-            isPaid: 1,
-            confirmedAt: 1,
-            createdAt: 1,
-          },
-        },
-        { $sort: { date: -1 } },
-      ]);
-
-      logger.debug("✅ Found payments:", payments.length);
-      logger.debug("✅ Filters applied:", matchCondition);
-
-      return {
-        status: "success",
-        data: payments,
-      };
-    } catch (error) {
-      logger.error("❌ Error getting payment history:", error);
-      throw BaseError.InternalServerError("To'lovlar tarixini olishda xatolik");
-    }
+    const paymentQueryService = (await import("./payment/payment.query.service")).default;
+    return paymentQueryService.getPaymentHistory(customerId, contractId, filters);
   }
 
   /**
@@ -1092,17 +950,17 @@ class PaymentService {
       });
 
       // ✅ YANGI: Haqiqiy remainingAmount'ni hisoblash
-      if (currentRemaining < 0.01) {
-        throw BaseError.BadRequest("Bu to'lovda qolgan qarz yo'q (to'liq to'langan)");
+      if (!isAmountPositive(currentRemaining)) {
+        throw BaseError.BadRequest(PAYMENT_MESSAGES.NO_REMAINING_DEBT);
       }
 
       // ✅ Qo'shimcha tekshiruv: Status PAID bo'lsa va haqiqatan qarz yo'q bo'lsa
-      if (existingPayment.status === PaymentStatus.PAID && currentRemaining < 0.01) {
-        throw BaseError.BadRequest("Bu to'lov allaqachon to'liq to'langan");
+      if (existingPayment.status === PaymentStatus.PAID && !isAmountPositive(currentRemaining)) {
+        throw BaseError.BadRequest(PAYMENT_MESSAGES.NO_REMAINING_DEBT);
       }
 
       // ⚠️ Agar status PAID lekin qarz bor bo'lsa - bu xato holat, davom ettiramiz
-      if (existingPayment.status === PaymentStatus.PAID && currentRemaining >= 0.01) {
+      if (existingPayment.status === PaymentStatus.PAID && isAmountPositive(currentRemaining)) {
         logger.warn(`⚠️ WARNING: Payment status is PAID but has remaining amount: ${currentRemaining.toFixed(2)}$`);
         logger.warn("⚠️ This should not happen! Continuing with payRemaining...");
       }
@@ -1119,7 +977,7 @@ class PaymentService {
       // ✅ TUZATISH #4: currentRemaining ishlatish (savedRemainingAmount emas)
       // ✅ YANGI: Ortiqcha to'lashga ruxsat berish
       let excessAmount = 0;
-      if (paymentAmount > currentRemaining + 0.01) {
+      if (paymentAmount > currentRemaining + PAYMENT_CONSTANTS.TOLERANCE) {
         excessAmount = paymentAmount - currentRemaining;
         logger.debug(`💰 Excess payment detected: ${excessAmount.toFixed(2)} $`);
       }
@@ -1138,7 +996,7 @@ class PaymentService {
       logger.debug(`✅ Payment amount NOT changed (remains ${existingPayment.amount} $)`);
       
       // ✅ Agar ortiqcha to'lansa, excessAmount'ni saqlash
-      if (excessAmount > 0.01) {
+      if (isAmountPositive(excessAmount)) {
         existingPayment.excessAmount = excessAmount;
         existingPayment.status = PaymentStatus.OVERPAID;
         logger.debug(
@@ -1148,7 +1006,7 @@ class PaymentService {
         );
       }
       // 5. Status'ni yangilash
-      else if (newRemainingAmount < 0.01) {
+      else if (!isAmountPositive(newRemainingAmount)) {
         existingPayment.status = PaymentStatus.PAID;
         existingPayment.isPaid = true;
         logger.debug("✅ Payment status changed to PAID");
@@ -1173,12 +1031,10 @@ class PaymentService {
       if (existingPayment.notes) {
         const notes = await Notes.findById(existingPayment.notes);
         if (notes) {
-          notes.text += `\n\n💰 [${new Date().toLocaleDateString(
-            "uz-UZ"
-          )}] Qolgan qarz to'landi: ${paymentAmount} $`;
-          if (payData.notes) {
-            notes.text += `\nIzoh: ${payData.notes}`;
-          }
+          notes.text += createRemainingPaymentNote({
+            paymentAmount,
+            customNote: payData.notes,
+          });
           await notes.save();
         }
       }
@@ -2013,7 +1869,7 @@ class PaymentService {
     try {
       logger.debug("🕐 === CHECKING EXPIRED PENDING PAYMENTS ===");
 
-      const TIMEOUT_HOURS = 24;
+      const TIMEOUT_HOURS = PAYMENT_CONSTANTS.PENDING_TIMEOUT_HOURS;
       const timeoutDate = new Date();
       timeoutDate.setHours(timeoutDate.getHours() - TIMEOUT_HOURS);
 
@@ -2038,9 +1894,7 @@ class PaymentService {
           if (payment.notes) {
             const notes = await Notes.findById(payment.notes);
             if (notes) {
-              notes.text += `\n\n[AVTOMATIK RAD ETILDI: ${TIMEOUT_HOURS} soat ichida kassa tomonidan tasdiqlanmadi - ${new Date().toLocaleString(
-                "uz-UZ"
-              )}]`;
+              notes.text += createAutoRejectionNote(TIMEOUT_HOURS);
               await notes.save();
             }
           }
