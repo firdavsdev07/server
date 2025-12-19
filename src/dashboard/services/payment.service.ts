@@ -454,6 +454,16 @@ class PaymentService {
       if (!payment) {
         throw BaseError.NotFoundError("To'lov topilmadi");
       }
+      
+      // Debug: payment obyektini to'liq ko'rish
+      logger.debug("📦 Payment object from DB:", {
+        _id: payment._id,
+        amount: payment.amount,
+        actualAmount: payment.actualAmount,
+        targetMonth: payment.targetMonth,
+        hasTargetMonth: 'targetMonth' in payment,
+        paymentKeys: Object.keys(payment.toObject())
+      });
 
       logger.debug("📦 Payment details:", {
         id: payment._id,
@@ -667,7 +677,12 @@ class PaymentService {
           entity: AuditEntity.PAYMENT,
           entityId: paymentId,
           userId: user.sub,
-          userInfo: { name: user.name, role: user.role }
+          userInfo: { name: user.name, role: user.role },
+          payment: {
+            targetMonth: payment.targetMonth,
+            amount: payment.amount,
+            actualAmount: payment.actualAmount
+          }
         });
         
         await auditLogService.createLog({
