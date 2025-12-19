@@ -115,6 +115,29 @@ class PaymentService {
       debtorDebtAmount: existingDebtor.debtAmount,
     });
 
+    // ✅ YANGI: Kam to'lov bo'lsa, nextPaymentDate MAJBURIY
+    if (calculatedRemainingAmount > 0) {
+      if (!payData.nextPaymentDate) {
+        throw BaseError.BadRequest(
+          "Kam to'lov qilganda keyingi to'lov sanasi majburiy!"
+        );
+      }
+      
+      // ✅ Validation: nextPaymentDate must be in future
+      const nextDate = new Date(payData.nextPaymentDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Reset time to start of day
+      nextDate.setHours(0, 0, 0, 0);
+      
+      if (nextDate <= today) {
+        throw BaseError.BadRequest(
+          "Keyingi to'lov sanasi bugundan keyingi kun bo'lishi kerak!"
+        );
+      }
+      
+      logger.debug(`✅ nextPaymentDate validated: ${nextDate.toISOString()}`);
+    }
+
     const paymentDoc = await Payment.create({
       amount: expectedDebtAmount, // ✅ Qarzning asl summasi (masalan $48) - KASSADA SHU KO'RINADI
       actualAmount: actualAmount, // ✅ Haqiqatda to'langan summa (masalan $48 yoki ko'proq)
@@ -129,6 +152,7 @@ class PaymentService {
       excessAmount: calculatedExcessAmount, // Hisoblangan ortiqcha (agar ko'p to'lasa)
       remainingAmount: calculatedRemainingAmount, // Hisoblangan kam to'langan (agar kam to'lasa)
       targetMonth: payData.targetMonth || calculatedTargetMonth, // ✅ Frontend'dan yoki backend'da hisoblangan
+      nextPaymentDate: payData.nextPaymentDate ? new Date(payData.nextPaymentDate) : undefined, // ✅ YANGI
     });
 
     // ✅ MUHIM: PENDING payment'ni contract'ga qo'shamiz (frontend uchun zarur!)
@@ -219,6 +243,29 @@ class PaymentService {
       targetMonth: payData.targetMonth || calculatedTargetMonth,
     });
 
+    // ✅ YANGI: Kam to'lov bo'lsa, nextPaymentDate MAJBURIY
+    if (calculatedRemainingAmount > 0) {
+      if (!payData.nextPaymentDate) {
+        throw BaseError.BadRequest(
+          "Kam to'lov qilganda keyingi to'lov sanasi majburiy!"
+        );
+      }
+      
+      // ✅ Validation: nextPaymentDate must be in future
+      const nextDate = new Date(payData.nextPaymentDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Reset time to start of day
+      nextDate.setHours(0, 0, 0, 0);
+      
+      if (nextDate <= today) {
+        throw BaseError.BadRequest(
+          "Keyingi to'lov sanasi bugundan keyingi kun bo'lishi kerak!"
+        );
+      }
+      
+      logger.debug(`✅ nextPaymentDate validated: ${nextDate.toISOString()}`);
+    }
+
     const paymentDoc = await Payment.create({
       amount: expectedMonthlyPayment, // ✅ Kutilgan oylik to'lov (faqat 148$)
       actualAmount: actualAmount, // ✅ Haqiqatda to'langan summa (296$)
@@ -233,6 +280,7 @@ class PaymentService {
       excessAmount: calculatedExcessAmount, // Hisoblangan ortiqcha (148$)
       remainingAmount: calculatedRemainingAmount, // Hisoblangan kam to'langan
       targetMonth: payData.targetMonth || calculatedTargetMonth, // ✅ Frontend'dan yoki backend'da hisoblangan
+      nextPaymentDate: payData.nextPaymentDate ? new Date(payData.nextPaymentDate) : undefined, // ✅ YANGI
     });
 
     // ✅ MUHIM: PENDING payment'ni contract'ga qo'shamiz (frontend uchun zarur!)

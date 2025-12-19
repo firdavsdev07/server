@@ -7,6 +7,7 @@ import {
   IsEnum,
   ValidateNested,
   IsOptional,
+  IsDateString,
 } from "class-validator";
 import { Type } from "class-transformer";
 
@@ -32,6 +33,10 @@ export class PayDto {
   @IsNumber({}, { message: "Target oy raqam bo'lishi kerak" })
   @Min(1, { message: "Target oy 1 dan kichik bo'lmasligi kerak" })
   targetMonth: number; // ✅ Yangi: Qaysi oyga to'lov qilinayotgani (REQUIRED)
+
+  @IsDateString({}, { message: "Keyingi to'lov sanasi noto'g'ri formatda" })
+  @IsOptional()
+  nextPaymentDate?: string; // ✅ YANGI: Kam to'lov bo'lsa, qolgan qismini qachon to'lash kerak
 
   @ValidateNested()
   @Type(() => CurrencyDetailsDto)
@@ -68,6 +73,10 @@ export class ReceivePaymentDto {
   @IsString({ message: "Izoh matn bo'lishi kerak" })
   @IsOptional()
   notes?: string;
+
+  @IsDateString({}, { message: "Keyingi to'lov sanasi noto'g'ri formatda" })
+  @IsOptional()
+  nextPaymentDate?: string; // ✅ YANGI: Kam to'lov bo'lsa, qolgan qismini qachon to'lash kerak
 
   @ValidateNested()
   @Type(() => CurrencyDetailsDto)

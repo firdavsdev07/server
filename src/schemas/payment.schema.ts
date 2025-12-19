@@ -45,6 +45,7 @@ export interface IPayment {
   appliedToPaymentId?: IPayment | string; // Qaysi to'lovga qo'llanildi (ortiqcha summa uchun)
   targetMonth?: number; // ✅ YANGI - Qaysi oyga to'lov qilinmoqda (1, 2, 3...)
   reminderDate?: Date; // ✅ YANGI - Har bir to'lov uchun alohida eslatma vaqti
+  nextPaymentDate?: Date; // ✅ YANGI - Kam to'lov bo'lsa, qolgan qismini qachon to'lash kerak
   // ✅ Mongoose timestamps (avtomatik qo'shiladi)
   createdAt?: Date;
   updatedAt?: Date;
@@ -108,6 +109,7 @@ const PaymentSchema = new Schema<IPayment>(
     },
     targetMonth: { type: Number, required: true }, // ✅ YANGI - Qaysi oyga to'lov qilinmoqda (REQUIRED)
     reminderDate: { type: Date, required: false }, // ✅ YANGI - Har bir to'lov uchun eslatma
+    nextPaymentDate: { type: Date, required: false }, // ✅ YANGI - Kam to'lov bo'lsa, qolgan qismini qachon to'lash kerak
   },
   {
     timestamps: true,
