@@ -1158,7 +1158,22 @@ class PaymentService {
     },
     user: IJwtUser
   ) {
-    return withTransaction(async (session) => {
+    // ✅ TUZATISH: Audit log uchun ma'lumotlarni saqlash
+    const auditData: {
+      payments: any[];
+      contractId: string;
+      customerId: string;
+      customerName: string;
+      contractName: string;
+    } = {
+      payments: [],
+      contractId: "",
+      customerId: "",
+      customerName: "",
+      contractName: "",
+    };
+
+    const result = await withTransaction(async (session) => {
       logger.debug("💰 === PAY BY CONTRACT (DASHBOARD - WITH TRANSACTION) ===");
 
       const contract = await Contract.findById(payData.contractId).populate(
@@ -1324,49 +1339,19 @@ class PaymentService {
       // await session.commitTransaction();
       logger.debug("✅ payByContract completed successfully (NO TRANSACTION - DEV MODE)");
 
-      // ✅ AUDIT LOG: To'lov yaratish (har bir yaratilgan to'lov uchun)
-      try {
-        const auditLogService = (await import("../../services/audit-log.service")).default;
-        const { AuditAction, AuditEntity } = await import("../../schemas/audit-log.schema");
-        
-        // Har bir yaratilgan to'lov uchun audit log yozish
-        for (const payment of createdPayments) {
-          await auditLogService.createLog({
-            action: AuditAction.PAYMENT,
-            entity: AuditEntity.PAYMENT,
-            entityId: payment._id.toString(),
-            userId: user.sub,
-            metadata: {
-              paymentType: "monthly",
-              paymentStatus: payment.status,
-              amount: payment.actualAmount || payment.amount,
-              targetMonth: payment.targetMonth,
-              affectedEntities: [
-                {
-                  entityType: "contract",
-                  entityId: contract._id.toString(),
-                  entityName: contract.productName || "Contract",
-                },
-                {
-                  entityType: "customer",
-                  entityId: contract.customer._id?.toString() || contract.customer.toString(),
-                  entityName: `${contract.customer.firstName || ""} ${contract.customer.lastName || ""}`.trim(),
-                }
-              ]
-            }
-          });
-        }
-        
-        logger.debug(`✅ Audit log created for ${createdPayments.length} payment(s)`);
-      } catch (auditError) {
-        logger.error("❌ Error creating audit log:", auditError);
-        logger.error("❌ Audit error details:", {
-          message: (auditError as Error).message,
-          stack: (auditError as Error).stack,
-          userId: user.sub,
-          contractId: contract._id
-        });
-      }
+      // ✅ TUZATISH: Audit log ma'lumotlarini to'plash (transaction ichida)
+      auditData.payments = createdPayments.map(p => ({
+        _id: p._id.toString(),
+        status: p.status,
+        amount: p.actualAmount || p.amount,
+        targetMonth: p.targetMonth,
+      }));
+      auditData.contractId = contract._id.toString();
+      auditData.customerId = contract.customer._id?.toString() || contract.customer.toString();
+      auditData.customerName = `${contract.customer.firstName || ""} ${contract.customer.lastName || ""}`.trim();
+      auditData.contractName = contract.productName || "Contract";
+
+      logger.debug(`📝 Audit data collected: ${auditData.payments.length} payment(s)`);
 
       // ✅ Response'da to'lov holati haqida ma'lumot qaytarish
       const lastPayment = createdPayments[createdPayments.length - 1];
@@ -1399,6 +1384,73 @@ class PaymentService {
         },
       };
     }); // End of withTransaction
+
+    // ✅ TUZATISH: Audit log'ni transaction TASHQARISIDA yaratish
+    // Transaction muvaffaqiyatli tugagandan keyin audit log yoziladi
+    try {
+      logger.debug("📝 Creating audit log after transaction completion...");
+      logger.debug("📝 Audit data:", {
+        paymentsCount: auditData.payments.length,
+        userId: user.sub,
+        contractId: auditData.contractId,
+      });
+
+      // user.sub tekshiruvi
+      if (!user || !user.sub) {
+        logger.error("❌ Cannot create audit log: user.sub is missing", { user });
+        return result; // Audit log yaratilmasa ham, asosiy natija qaytariladi
+      }
+
+      // Agar to'lovlar bo'lmasa ham, audit log yaratish
+      if (auditData.payments.length === 0) {
+        logger.warn("⚠️ No payments created, skipping audit log");
+        return result;
+      }
+
+      const auditLogService = (await import("../../services/audit-log.service")).default;
+      const { AuditAction, AuditEntity } = await import("../../schemas/audit-log.schema");
+      
+      // Har bir yaratilgan to'lov uchun audit log yozish
+      for (const payment of auditData.payments) {
+        await auditLogService.createLog({
+          action: AuditAction.PAYMENT,
+          entity: AuditEntity.PAYMENT,
+          entityId: payment._id,
+          userId: user.sub,
+          metadata: {
+            paymentType: "monthly",
+            paymentStatus: payment.status,
+            amount: payment.amount,
+            targetMonth: payment.targetMonth,
+            affectedEntities: [
+              {
+                entityType: "contract",
+                entityId: auditData.contractId,
+                entityName: auditData.contractName,
+              },
+              {
+                entityType: "customer",
+                entityId: auditData.customerId,
+                entityName: auditData.customerName,
+              }
+            ]
+          }
+        });
+      }
+      
+      logger.debug(`✅ Audit log created successfully for ${auditData.payments.length} payment(s)`);
+    } catch (auditError) {
+      logger.error("❌ Error creating audit log:", auditError);
+      logger.error("❌ Audit error details:", {
+        message: (auditError as Error).message,
+        stack: (auditError as Error).stack,
+        userId: user.sub,
+        auditData,
+      });
+      // Audit log xatosi asosiy operatsiyani buzmasin
+    }
+
+    return result;
   }
 
   /**
