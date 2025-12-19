@@ -23,12 +23,19 @@ class AuditLogController {
       const dateParam = req.query.date as string;
       
       // ✅ TIMEZONE FIX: O'zbekiston vaqt zonasi (UTC+5)
-      const { parseUzbekistanDate } = await import("../../utils/helpers/date.helper");
+      const { parseUzbekistanDate, getUzbekistanDayEnd } = await import("../../utils/helpers/date.helper");
       
       let selectedDate: Date;
       if (dateParam) {
         // dateParam format: "2024-12-18"
         selectedDate = parseUzbekistanDate(dateParam);
+        
+        // Debug log
+        console.log('🔍 Audit Log Query:', {
+          dateParam,
+          startDate: selectedDate.toISOString(),
+          endDate: getUzbekistanDayEnd(dateParam).toISOString(),
+        });
       } else {
         selectedDate = new Date();
       }
@@ -42,6 +49,14 @@ class AuditLogController {
       const limit = Math.min(limitParam, 500); // Max 500 ta yozuv
       
       const activities = await auditLogService.getDailyActivity(selectedDate, limit);
+      
+      // Debug log - qaytarilgan ma'lumotlar
+      console.log('📊 Audit Log Result:', {
+        dateParam,
+        foundLogs: activities.length,
+        firstLog: activities[0]?.timestamp,
+        lastLog: activities[activities.length - 1]?.timestamp,
+      });
 
       res.status(200).json({
         status: "success",

@@ -9,21 +9,22 @@
  * O'zbekiston vaqt zonasida sanani parse qilish
  * 
  * Format: "2024-12-18" (YYYY-MM-DD)
- * Return: Date object representing midnight in Uzbekistan timezone
+ * Return: Date object representing START of day in Uzbekistan timezone
  * 
  * @param dateString - Sana string (YYYY-MM-DD)
- * @returns Date object (UTC format, but represents Uzbekistan midnight)
+ * @returns Date object (UTC format, represents Uzbekistan 00:00:00)
+ * 
+ * Example: "2024-12-20" => 2024-12-20 00:00:00 (Toshkent) = 2024-12-19 19:00:00 (UTC)
  */
 export const parseUzbekistanDate = (dateString: string): Date => {
   const [year, month, day] = dateString.split('-').map(Number);
   
-  // O'zbekiston vaqti 00:00:00 ni UTC ga o'tkazish
+  // O'zbekiston UTC+5
   // Toshkent 2024-12-20 00:00:00 = UTC 2024-12-19 19:00:00
-  // Date.UTC() ishlatib to'g'ridan-to'g'ri UTC da yaratamiz
+  // 
+  // Date.UTC() bilan UTC da yaratib, -5 soat qo'shamiz
   const utcDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
-  
-  // O'zbekiston UTC+5, shuning uchun -5 soat qilamiz
-  utcDate.setUTCHours(-5);
+  utcDate.setUTCHours(utcDate.getUTCHours() - 5);
   
   return utcDate;
 };
