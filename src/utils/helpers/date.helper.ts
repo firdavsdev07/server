@@ -17,12 +17,13 @@
 export const parseUzbekistanDate = (dateString: string): Date => {
   const [year, month, day] = dateString.split('-').map(Number);
   
-  // UTC da midnight yaratish
+  // O'zbekiston vaqti 00:00:00 ni UTC ga o'tkazish
+  // Toshkent 2024-12-20 00:00:00 = UTC 2024-12-19 19:00:00
+  // Date.UTC() ishlatib to'g'ridan-to'g'ri UTC da yaratamiz
   const utcDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
   
-  // O'zbekiston UTC+5, shuning uchun UTC midnight'dan -5 soat
-  // Masalan: 2024-12-18T00:00:00 (Toshkent) = 2024-12-17T19:00:00 (UTC)
-  utcDate.setUTCHours(utcDate.getUTCHours() - 5);
+  // O'zbekiston UTC+5, shuning uchun -5 soat qilamiz
+  utcDate.setUTCHours(-5);
   
   return utcDate;
 };
@@ -46,11 +47,10 @@ export const getUzbekistanDayStart = (dateString: string): Date => {
 export const getUzbekistanDayEnd = (dateString: string): Date => {
   const [year, month, day] = dateString.split('-').map(Number);
   
-  // UTC da kun oxiri
-  const utcDate = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
-  
-  // O'zbekiston UTC+5, shuning uchun -5 soat
-  utcDate.setUTCHours(utcDate.getUTCHours() - 5);
+  // O'zbekiston vaqti 23:59:59 ni UTC ga o'tkazish
+  // Toshkent 2024-12-20 23:59:59 = UTC 2024-12-20 18:59:59
+  // Date.UTC() ishlatib to'g'ridan-to'g'ri UTC da yaratamiz va 23-5=18 soat qo'yamiz
+  const utcDate = new Date(Date.UTC(year, month - 1, day, 18, 59, 59, 999));
   
   return utcDate;
 };
