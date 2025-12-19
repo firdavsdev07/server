@@ -46,7 +46,7 @@ class CashService {
         .populate("managerId", "firstName lastName")
         .populate("notes", "text")
         .select(
-          "_id amount actualAmount date isPaid paymentType notes customerId managerId status remainingAmount excessAmount expectedAmount confirmedAt confirmedBy createdAt updatedAt"
+          "_id amount actualAmount date isPaid paymentType notes customerId managerId status remainingAmount excessAmount expectedAmount confirmedAt confirmedBy targetMonth createdAt updatedAt"
         )
         .sort({ date: -1 })
         .lean();
@@ -89,6 +89,15 @@ class CashService {
 
             // ✅ YANGI: Reminder ma'lumotlarini topish (agar targetMonth mavjud bo'lsa)
             let reminder = null;
+            
+            logger.log(`🔍 Checking reminder for payment ${payment._id}:`, {
+              hasContract: !!contract,
+              contractId: contract?._id,
+              targetMonth: payment.targetMonth,
+              paymentType: payment.paymentType,
+              status: payment.status,
+            });
+            
             if (contract && payment.targetMonth) {
               reminder = await Reminder.findOne({
                 contractId: contract._id,
@@ -100,9 +109,24 @@ class CashService {
 
               if (reminder) {
                 logger.log(
-                  `📅 Reminder found for payment ${payment._id}: ${reminder.reminderDate}`
+                  `📅 ✅ Reminder found for payment ${payment._id}:`, {
+                    reminderDate: reminder.reminderDate,
+                    targetMonth: reminder.targetMonth,
+                    reason: reminder.reason,
+                  }
+                );
+              } else {
+                logger.log(
+                  `📅 ❌ No reminder found for payment ${payment._id} (contract: ${contract._id}, targetMonth: ${payment.targetMonth})`
                 );
               }
+            } else {
+              logger.log(
+                `📅 ⚠️ Skipping reminder check for payment ${payment._id}:`, {
+                  reason: !contract ? 'No contract' : 'No targetMonth',
+                  targetMonth: payment.targetMonth,
+                }
+              );
             }
 
             if (contract) {
