@@ -684,7 +684,8 @@ class PaymentService {
           metadata: {
             paymentType: "monthly",
             paymentStatus: payment.status,
-            amount: payment.actualAmount || payment.amount
+            amount: payment.actualAmount || payment.amount,
+            targetMonth: payment.targetMonth  // ✅ Qaysi oy ekani qo'shildi
           }
         });
         logger.debug("✅ Audit log created for payment confirmation");
