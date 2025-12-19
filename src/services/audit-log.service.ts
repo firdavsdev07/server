@@ -366,13 +366,32 @@ class AuditLogService {
 
   /**
    * Kunlik aktiv faoliyat olish (optimized with limit)
+   * 
+   * @param date - Allaqachon UTC formatda kelgan sana (controller'dan parseUzbekistanDate orqali)
+   * @param limit - Maksimal yozuvlar soni
    */
   async getDailyActivity(date: Date = new Date(), limit: number = 100) {
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
+    // Controller'dan kelgan date allaqachon to'g'ri UTC formatda:
+    // "2025-12-19" => 2025-12-18T19:00:00.000Z (19-dekabr 00:00 Toshkent)
+    // "2025-12-20" => 2025-12-19T19:00:00.000Z (20-dekabr 00:00 Toshkent)
     
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
+    const { getUzbekistanDayEnd } = require('../utils/helpers/date.helper');
+    
+    // Start date allaqachon to'g'ri
+    const startOfDay = date;
+    
+    // End date'ni hisoblash
+    // date = 2025-12-18T19:00:00.000Z => bu 19-dekabrning boshi
+    // Bizga 19-dekabrning oxiri kerak: 2025-12-19T18:59:59.999Z
+    // 
+    // UTC date'dan original date string'ni qayta yaratish:
+    // 2025-12-18T19:00:00.000Z + 5 soat = 2025-12-19T00:00 (Toshkent)
+    const dateObj = new Date(date.getTime() + 5 * 60 * 60 * 1000); // +5 soat
+    const year = dateObj.getUTCFullYear();
+    const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getUTCDate()).padStart(2, '0');
+    const dateString = `${year}-${month}-${day}`;
+    const endOfDay = getUzbekistanDayEnd(dateString);
 
     const activities = await AuditLog.find({
       timestamp: {
