@@ -53,8 +53,10 @@ class CashService {
 
       logger.log("✅ Found pending payments for cash:", payments.length);
 
-      // ✅ Har bir payment uchun contractId ni topish
+      // ✅ Har bir payment uchun contractId va reminder ma'lumotlarini topish
       const Contract = (await import("../../schemas/contract.schema")).default;
+      const Reminder = (await import("../../schemas/reminder.schema")).default;
+      
       const paymentsWithContract = await Promise.all(
         payments.map(async (payment: any) => {
           try {
@@ -85,6 +87,24 @@ class CashService {
               }
             }
 
+            // ✅ YANGI: Reminder ma'lumotlarini topish (agar targetMonth mavjud bo'lsa)
+            let reminder = null;
+            if (contract && payment.targetMonth) {
+              reminder = await Reminder.findOne({
+                contractId: contract._id,
+                targetMonth: payment.targetMonth,
+                isActive: true,
+              })
+                .select("reminderDate reason targetMonth")
+                .lean();
+
+              if (reminder) {
+                logger.log(
+                  `📅 Reminder found for payment ${payment._id}: ${reminder.reminderDate}`
+                );
+              }
+            }
+
             if (contract) {
               logger.log(
                 `✅ Payment ${payment._id} -> Contract ${contract._id} (${contract.productName})`
@@ -96,6 +116,11 @@ class CashService {
             return {
               ...payment,
               contractId: contract?._id?.toString() || null,
+              reminder: reminder ? {
+                reminderDate: reminder.reminderDate,
+                reason: reminder.reason,
+                targetMonth: reminder.targetMonth,
+              } : null,
             };
           } catch (error) {
             logger.error(
@@ -105,6 +130,7 @@ class CashService {
             return {
               ...payment,
               contractId: null,
+              reminder: null,
             };
           }
         })
@@ -119,6 +145,7 @@ class CashService {
           status: paymentsWithContract[0].status,
           contractId: paymentsWithContract[0].contractId,
           date: paymentsWithContract[0].date,
+          reminder: paymentsWithContract[0].reminder,
         });
       }
 
