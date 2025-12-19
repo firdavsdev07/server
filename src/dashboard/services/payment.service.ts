@@ -1167,6 +1167,7 @@ class PaymentService {
               amount: payData.amount,
               actualAmount: existingPayment.actualAmount,
               remainingAmount: existingPayment.remainingAmount,
+              targetMonth: existingPayment.targetMonth, // ✅ Oy raqami qo'shildi
               affectedEntities: contract ? [
                 {
                   entityType: "contract",
