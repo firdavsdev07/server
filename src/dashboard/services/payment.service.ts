@@ -1128,6 +1128,50 @@ class PaymentService {
         }
       }
 
+      // ✅ AUDIT LOG: Qolgan qarzni to'lash
+      try {
+        logger.debug("📝 Creating audit log for payRemaining...");
+        
+        if (!user || !user.sub) {
+          logger.error("❌ Cannot create audit log: user.sub is missing", { user });
+        } else {
+          const auditLogService = (await import("../../services/audit-log.service")).default;
+          const { AuditAction, AuditEntity } = await import("../../schemas/audit-log.schema");
+          
+          const contract = await Contract.findOne({ payments: existingPayment._id }).populate("customer");
+          
+          await auditLogService.createLog({
+            action: AuditAction.PAYMENT,
+            entity: AuditEntity.PAYMENT,
+            entityId: existingPayment._id.toString(),
+            userId: user.sub,
+            metadata: {
+              paymentType: "remaining",
+              paymentStatus: existingPayment.status,
+              amount: payData.amount,
+              actualAmount: existingPayment.actualAmount,
+              remainingAmount: existingPayment.remainingAmount,
+              affectedEntities: contract ? [
+                {
+                  entityType: "contract",
+                  entityId: contract._id.toString(),
+                  entityName: contract.productName || "Contract",
+                },
+                {
+                  entityType: "customer",
+                  entityId: contract.customer._id?.toString() || contract.customer.toString(),
+                  entityName: `${contract.customer.firstName || ""} ${contract.customer.lastName || ""}`.trim(),
+                }
+              ] : []
+            }
+          });
+          
+          logger.debug("✅ Audit log created for payRemaining");
+        }
+      } catch (auditError) {
+        logger.error("❌ Error creating audit log:", auditError);
+      }
+
       return {
         status: "success",
         message: message,
@@ -1891,6 +1935,52 @@ class PaymentService {
             2
           )} $ ortiqcha summa prepaid balance ga qo'shildi`;
         }
+      }
+
+      // ✅ AUDIT LOG: Barcha oylarni to'lash
+      try {
+        logger.debug("📝 Creating audit log for payAllRemainingMonths...");
+        
+        if (!user || !user.sub) {
+          logger.error("❌ Cannot create audit log: user.sub is missing", { user });
+        } else if (createdPayments.length === 0) {
+          logger.warn("⚠️ No payments created, skipping audit log");
+        } else {
+          const auditLogService = (await import("../../services/audit-log.service")).default;
+          const { AuditAction, AuditEntity } = await import("../../schemas/audit-log.schema");
+          
+          // Har bir yaratilgan to'lov uchun audit log yozish
+          for (const payment of createdPayments) {
+            await auditLogService.createLog({
+              action: AuditAction.PAYMENT,
+              entity: AuditEntity.PAYMENT,
+              entityId: payment._id.toString(),
+              userId: user.sub,
+              metadata: {
+                paymentType: "pay_all_remaining",
+                paymentStatus: payment.status,
+                amount: payment.actualAmount || payment.amount,
+                targetMonth: payment.targetMonth,
+                affectedEntities: [
+                  {
+                    entityType: "contract",
+                    entityId: contract._id.toString(),
+                    entityName: contract.productName || "Contract",
+                  },
+                  {
+                    entityType: "customer",
+                    entityId: contract.customer._id?.toString() || contract.customer.toString(),
+                    entityName: `${contract.customer.firstName || ""} ${contract.customer.lastName || ""}`.trim(),
+                  }
+                ]
+              }
+            });
+          }
+          
+          logger.debug(`✅ Audit log created for ${createdPayments.length} payment(s) in payAllRemainingMonths`);
+        }
+      } catch (auditError) {
+        logger.error("❌ Error creating audit log:", auditError);
       }
 
       return {

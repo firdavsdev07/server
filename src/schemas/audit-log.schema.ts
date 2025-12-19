@@ -38,6 +38,8 @@ export interface IAuditMetadata {
   paymentType?: string;
   paymentStatus?: string;
   amount?: number;
+  actualAmount?: number; // To'langan summa
+  remainingAmount?: number; // Qolgan summa
   targetMonth?: number;
   
   // Contract uchun
@@ -127,6 +129,8 @@ const AuditLogSchema = new Schema<IAuditLog>(
       paymentType: String,
       paymentStatus: String,
       amount: Number,
+      actualAmount: Number, // To'langan summa
+      remainingAmount: Number, // Qolgan summa
       targetMonth: Number,
       
       // Contract  

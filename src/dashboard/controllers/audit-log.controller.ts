@@ -37,7 +37,11 @@ class AuditLogController {
         return next(BaseError.BadRequest("Noto'g'ri sana formati"));
       }
 
-      const activities = await auditLogService.getDailyActivity(selectedDate);
+      // Limit parametri (default: 100, max: 500)
+      const limitParam = req.query.limit ? parseInt(req.query.limit as string) : 100;
+      const limit = Math.min(limitParam, 500); // Max 500 ta yozuv
+      
+      const activities = await auditLogService.getDailyActivity(selectedDate, limit);
 
       res.status(200).json({
         status: "success",
@@ -46,6 +50,7 @@ class AuditLogController {
           date: dayjs(selectedDate).format("YYYY-MM-DD"),
           activities,
           total: activities.length,
+          limit,
         },
       });
     } catch (error) {
@@ -273,7 +278,7 @@ class AuditLogController {
       }
 
       const today = new Date();
-      const activities = await auditLogService.getDailyActivity(today);
+      const activities = await auditLogService.getDailyActivity(today, 50); // Faqat 50 ta
 
       // Summary statistics
       const summary = {

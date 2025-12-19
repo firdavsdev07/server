@@ -365,9 +365,9 @@ class AuditLogService {
   }
 
   /**
-   * Kunlik aktiv faoliyat olish
+   * Kunlik aktiv faoliyat olish (optimized with limit)
    */
-  async getDailyActivity(date: Date = new Date()) {
+  async getDailyActivity(date: Date = new Date(), limit: number = 100) {
     const startOfDay = new Date(date);
     startOfDay.setHours(0, 0, 0, 0);
     
@@ -380,8 +380,10 @@ class AuditLogService {
         $lte: endOfDay,
       },
     })
+    .select('-userAgent -ipAddress') // Keraksiz fieldlarni o'chirish
     .populate("userId", "firstName lastName role")
     .sort({ timestamp: -1 })
+    .limit(limit)
     .lean();
 
     return activities;
