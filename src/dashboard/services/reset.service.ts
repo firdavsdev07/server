@@ -7,6 +7,7 @@ import { Debtor } from "../../schemas/debtor.schema";
 import Auth from "../../schemas/auth.schema";
 import Notes from "../../schemas/notes.schema";
 import Employee from "../../schemas/employee.schema";
+import AuditLog from "../../schemas/audit-log.schema"; // ✅ Audit log uchun
 import { RoleEnum } from "../../enums/role.enum";
 import { checkAllContractsStatus } from "../../utils/checkAllContractsStatus";
 import fs from "fs";
@@ -170,6 +171,10 @@ class ResetService {
       const deletedExcelFiles = await this.deleteExcelFiles();
       logger.debug(`✅ ${deletedExcelFiles} ta Excel fayl o'chirildi`);
 
+      // 11. Barcha audit loglarni o'chirish
+      const deletedAuditLogs = await AuditLog.deleteMany({});
+      logger.debug(`✅ ${deletedAuditLogs.deletedCount} ta audit log o'chirildi`);
+
       return {
         success: true,
         message: "Barcha ma'lumotlar va fayllar muvaffaqiyatli tozalandi",
@@ -184,6 +189,7 @@ class ResetService {
           balancesReset: updatedBalances.modifiedCount,
           uploadedFiles: deletedFiles,
           excelFiles: deletedExcelFiles,
+          auditLogs: deletedAuditLogs.deletedCount, // ✅ Audit loglar
         },
       };
     } catch (error: any) {
