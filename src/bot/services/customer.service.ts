@@ -50,14 +50,16 @@ class CustomerService {
     };
   }
 
-  async getUnpaidDebtors(user: IJwtUser) {
+  async getUnpaidDebtors(user: IJwtUser, filterDate?: string) {
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      // ✅ Agar filterDate berilgan bo'lsa, uni ishlatamiz, aks holda bugungi kunni
+      const today = filterDate ? new Date(filterDate) : new Date();
+      today.setHours(23, 59, 59, 999); // ✅ Kun oxirigacha barcha to'lovlarni olish
 
       logger.debug("\n🔍 === GETTING UNPAID DEBTORS ===");
       logger.debug("👤 Manager ID:", user.sub);
-      logger.debug("📅 Today:", today.toISOString().split("T")[0]);
+      logger.debug("📅 Filter Date:", today.toISOString().split("T")[0]);
+      logger.debug("📅 Original filterDate param:", filterDate || "not provided");
 
       // Debug: Barcha shartnomalarni sanash
       const totalContracts = await Contract.countDocuments({
@@ -82,7 +84,7 @@ class CustomerService {
             isActive: true,
             isDeleted: false,
             status: "active", // ✅ TUZATILDI: kichik harflar bilan
-            nextPaymentDate: { $lt: today }, // Kechikkan to'lovlar
+            nextPaymentDate: { $lte: today }, // ✅ Tanlangan sanagacha bo'lgan kechikkan to'lovlar
           },
         },
         {
