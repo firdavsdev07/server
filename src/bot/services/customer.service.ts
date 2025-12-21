@@ -65,16 +65,24 @@ class CustomerService {
         status: "active",
       };
 
+      // ✅ Bugungi sana (kechikkan to'lovlar uchun)
+      const today = new Date();
+      today.setHours(23, 59, 59, 999);
+
       if (!isShowAll && filterDate) {
-        // ✅ Faqat o'sha oyning o'sha kunidagi to'lovlar
+        // ✅ Faqat tanlangan sananing oyi va kunidagi qarzdorlar
         const selectedDate = new Date(filterDate);
         const targetDay = selectedDate.getDate(); // Kunni olish (1-31)
         const targetMonth = selectedDate.getMonth(); // Oyni olish (0-11)
 
-        logger.debug("📅 Filter by day:", targetDay);
-        logger.debug("📅 Filter by month:", targetMonth);
+        logger.debug("📅 Filter by:", {
+          day: targetDay,
+          month: targetMonth + 1,
+          filterType: "specific_month_day" // Faqat oy va kun bo'yicha
+        });
 
-        // ✅ nextPaymentDate ning kuni va oyi mos kelishi kerak
+        // ✅ nextPaymentDate ning FAQAT oyi va kuni mos kelishi kerak
+        // ✅ Kechikkan to'lovlarni ham ko'rsatish uchun: nextPaymentDate <= bugun
         matchCondition.$expr = {
           $and: [
             { $eq: [{ $dayOfMonth: "$nextPaymentDate" }, targetDay] },
@@ -82,15 +90,11 @@ class CustomerService {
           ],
         };
 
-        // ✅ Faqat kechikkan to'lovlar
-        const today = new Date();
-        today.setHours(23, 59, 59, 999);
-        matchCondition.nextPaymentDate = { $lt: today };
+        // ✅ Faqat kechikkan to'lovlar (bugundan oldingi)
+        matchCondition.nextPaymentDate = { $lte: today };
       } else {
         // ✅ Barcha kechikkan to'lovlar (filterDate yo'q bo'lsa)
-        const today = new Date();
-        today.setHours(23, 59, 59, 999);
-        matchCondition.nextPaymentDate = { $lt: today };
+        matchCondition.nextPaymentDate = { $lte: today };
       }
 
       logger.debug("🔍 Match condition:", JSON.stringify(matchCondition, null, 2));
