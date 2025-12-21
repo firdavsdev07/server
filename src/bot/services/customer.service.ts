@@ -70,30 +70,27 @@ class CustomerService {
       today.setHours(23, 59, 59, 999);
 
       if (!isShowAll && filterDate) {
-        // ✅ YANGI: Tanlangan sana (masalan, 20-dekabr) - 1-dekabrdan 20-dekabrgacha filterlash
+        // ✅ YANGI: Tanlangan sana (masalan, 21-dekabr) - HAR OYDA 1-kunidan 21-kungacha filterlash
         const selectedDate = new Date(filterDate + 'T00:00:00.000Z'); // ✅ UTC format
-        
-        // Oy boshini hisoblash (masalan, 2025-12-01)
-        const monthStart = new Date(selectedDate);
-        monthStart.setUTCDate(1);
-        monthStart.setUTCHours(0, 0, 0, 0);
-        
-        // Tanlangan sanani (masalan, 2025-12-20 23:59:59)
-        const monthEnd = new Date(selectedDate);
-        monthEnd.setUTCHours(23, 59, 59, 999);
+        const targetDay = selectedDate.getUTCDate(); // Masalan: 21
 
-        logger.debug("📅 Filter by DATE RANGE (month start to selected date):", {
-          monthStart: monthStart.toISOString(),
-          monthEnd: monthEnd.toISOString(),
+        logger.debug("📅 Filter by DAY RANGE (1 to selected day in ALL months):", {
+          targetDay: targetDay,
           originalDate: filterDate,
-          filterType: "date_range_current_month"
+          filterType: "day_range_all_months"
         });
 
-        // ✅ nextPaymentDate oyning 1-kunidan tanlangan kungacha bo'lishi kerak
-        matchCondition.nextPaymentDate = { 
-          $gte: monthStart, // ≥ oy boshi
-          $lte: monthEnd     // ≤ tanlangan sana
+        // ✅ nextPaymentDate ning KUNI 1 dan targetDay gacha bo'lishi kerak (har qaysi oyda)
+        // Va bugundan oldin bo'lishi kerak (kechikkan to'lovlar)
+        matchCondition.$expr = {
+          $and: [
+            { $gte: [{ $dayOfMonth: "$nextPaymentDate" }, 1] },      // Kun >= 1
+            { $lte: [{ $dayOfMonth: "$nextPaymentDate" }, targetDay] } // Kun <= 21
+          ]
         };
+        
+        // ✅ Faqat kechikkan to'lovlar (bugundan oldingi)
+        matchCondition.nextPaymentDate = { $lte: today };
       } else {
         // ✅ Barcha kechikkan to'lovlar (filterDate yo'q bo'lsa)
         matchCondition.nextPaymentDate = { $lte: today };
