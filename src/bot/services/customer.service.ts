@@ -70,24 +70,19 @@ class CustomerService {
       today.setHours(23, 59, 59, 999);
 
       if (!isShowAll && filterDate) {
-        // ✅ Faqat tanlangan sananing oyi va kunidagi qarzdorlar
-        const selectedDate = new Date(filterDate);
-        const targetDay = selectedDate.getDate(); // Kunni olish (1-31)
-        const targetMonth = selectedDate.getMonth(); // Oyni olish (0-11)
+        // ✅ HAR OYDA tanlangan KUN'dagi qarzdorlar
+        const selectedDate = new Date(filterDate + 'T00:00:00.000Z'); // ✅ UTC format
+        const targetDay = selectedDate.getUTCDate(); // ✅ UTC kunni olish (1-31)
 
-        logger.debug("📅 Filter by:", {
+        logger.debug("📅 Filter by DAY ONLY (all months):", {
           day: targetDay,
-          month: targetMonth + 1,
-          filterType: "specific_month_day" // Faqat oy va kun bo'yicha
+          originalDate: filterDate,
+          filterType: "day_only_all_months" // ✅ Har oyda shu kun
         });
 
-        // ✅ nextPaymentDate ning FAQAT oyi va kuni mos kelishi kerak
-        // ✅ Kechikkan to'lovlarni ham ko'rsatish uchun: nextPaymentDate <= bugun
+        // ✅ nextPaymentDate ning FAQAT KUNI mos kelishi kerak (har qaysi oyda)
         matchCondition.$expr = {
-          $and: [
-            { $eq: [{ $dayOfMonth: "$nextPaymentDate" }, targetDay] },
-            { $eq: [{ $month: "$nextPaymentDate" }, targetMonth + 1] }, // MongoDB month is 1-12
-          ],
+          $eq: [{ $dayOfMonth: "$nextPaymentDate" }, targetDay]
         };
 
         // ✅ Faqat kechikkan to'lovlar (bugundan oldingi)
