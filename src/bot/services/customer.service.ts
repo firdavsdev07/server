@@ -70,23 +70,30 @@ class CustomerService {
       today.setHours(23, 59, 59, 999);
 
       if (!isShowAll && filterDate) {
-        // ✅ HAR OYDA tanlangan KUN'dagi qarzdorlar
+        // ✅ YANGI: Tanlangan sana (masalan, 20-dekabr) - 1-dekabrdan 20-dekabrgacha filterlash
         const selectedDate = new Date(filterDate + 'T00:00:00.000Z'); // ✅ UTC format
-        const targetDay = selectedDate.getUTCDate(); // ✅ UTC kunni olish (1-31)
+        
+        // Oy boshini hisoblash (masalan, 2025-12-01)
+        const monthStart = new Date(selectedDate);
+        monthStart.setUTCDate(1);
+        monthStart.setUTCHours(0, 0, 0, 0);
+        
+        // Tanlangan sanani (masalan, 2025-12-20 23:59:59)
+        const monthEnd = new Date(selectedDate);
+        monthEnd.setUTCHours(23, 59, 59, 999);
 
-        logger.debug("📅 Filter by DAY ONLY (all months):", {
-          day: targetDay,
+        logger.debug("📅 Filter by DATE RANGE (month start to selected date):", {
+          monthStart: monthStart.toISOString(),
+          monthEnd: monthEnd.toISOString(),
           originalDate: filterDate,
-          filterType: "day_only_all_months" // ✅ Har oyda shu kun
+          filterType: "date_range_current_month"
         });
 
-        // ✅ nextPaymentDate ning FAQAT KUNI mos kelishi kerak (har qaysi oyda)
-        matchCondition.$expr = {
-          $eq: [{ $dayOfMonth: "$nextPaymentDate" }, targetDay]
+        // ✅ nextPaymentDate oyning 1-kunidan tanlangan kungacha bo'lishi kerak
+        matchCondition.nextPaymentDate = { 
+          $gte: monthStart, // ≥ oy boshi
+          $lte: monthEnd     // ≤ tanlangan sana
         };
-
-        // ✅ Faqat kechikkan to'lovlar (bugundan oldingi)
-        matchCondition.nextPaymentDate = { $lte: today };
       } else {
         // ✅ Barcha kechikkan to'lovlar (filterDate yo'q bo'lsa)
         matchCondition.nextPaymentDate = { $lte: today };
@@ -185,9 +192,16 @@ class CustomerService {
             delayDays: { $max: "$delayDays" },
             totalDebt: { $sum: "$remainingDebt" },
             contractsCount: { $sum: 1 },
+            maxNextPaymentDate: { $max: "$nextPaymentDate" }, // ✅ Eng katta nextPaymentDate
           },
         },
-        { $sort: { delayDays: -1 } },
+        // ✅ YANGI SORTING: Agar filterDate berilgan bo'lsa, nextPaymentDate bo'yicha kamayib borish (20→1)
+        // Aks holda, kechikish kunlari bo'yicha kamayib borish
+        { 
+          $sort: isShowAll 
+            ? { delayDays: -1 } // Barcha qarzdorlar - kechikish bo'yicha
+            : { maxNextPaymentDate: -1 } // Filterlangan - sana bo'yicha (20→19→...→1)
+        },
       ]);
 
       logger.debug(`✅ Found ${result.length} customers with overdue payments`);
