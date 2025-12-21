@@ -52,14 +52,48 @@ class CustomerService {
 
   async getUnpaidDebtors(user: IJwtUser, filterDate?: string) {
     try {
-      // ✅ Agar filterDate berilgan bo'lsa, uni ishlatamiz, aks holda bugungi kunni
-      const today = filterDate ? new Date(filterDate) : new Date();
-      today.setHours(23, 59, 59, 999); // ✅ Kun oxirigacha barcha to'lovlarni olish
-
       logger.debug("\n🔍 === GETTING UNPAID DEBTORS ===");
       logger.debug("👤 Manager ID:", user.sub);
-      logger.debug("📅 Filter Date:", today.toISOString().split("T")[0]);
       logger.debug("📅 Original filterDate param:", filterDate || "not provided");
+
+      // ✅ YANGI LOGIKA: Agar filterDate berilmagan bo'lsa, barcha qarzdorlarni qaytarish
+      const isShowAll = !filterDate;
+
+      let matchCondition: any = {
+        isActive: true,
+        isDeleted: false,
+        status: "active",
+      };
+
+      if (!isShowAll && filterDate) {
+        // ✅ Faqat o'sha oyning o'sha kunidagi to'lovlar
+        const selectedDate = new Date(filterDate);
+        const targetDay = selectedDate.getDate(); // Kunni olish (1-31)
+        const targetMonth = selectedDate.getMonth(); // Oyni olish (0-11)
+
+        logger.debug("📅 Filter by day:", targetDay);
+        logger.debug("📅 Filter by month:", targetMonth);
+
+        // ✅ nextPaymentDate ning kuni va oyi mos kelishi kerak
+        matchCondition.$expr = {
+          $and: [
+            { $eq: [{ $dayOfMonth: "$nextPaymentDate" }, targetDay] },
+            { $eq: [{ $month: "$nextPaymentDate" }, targetMonth + 1] }, // MongoDB month is 1-12
+          ],
+        };
+
+        // ✅ Faqat kechikkan to'lovlar
+        const today = new Date();
+        today.setHours(23, 59, 59, 999);
+        matchCondition.nextPaymentDate = { $lt: today };
+      } else {
+        // ✅ Barcha kechikkan to'lovlar (filterDate yo'q bo'lsa)
+        const today = new Date();
+        today.setHours(23, 59, 59, 999);
+        matchCondition.nextPaymentDate = { $lt: today };
+      }
+
+      logger.debug("🔍 Match condition:", JSON.stringify(matchCondition, null, 2));
 
       // Debug: Barcha shartnomalarni sanash
       const totalContracts = await Contract.countDocuments({
@@ -69,23 +103,10 @@ class CustomerService {
       });
       logger.debug("📊 Total active contracts:", totalContracts);
 
-      const overdueContracts = await Contract.countDocuments({
-        isActive: true,
-        isDeleted: false,
-        status: "active",
-        nextPaymentDate: { $lt: today },
-      });
-      logger.debug("⏰ Overdue contracts:", overdueContracts);
-
       // To'g'ridan-to'g'ri Contract'lardan kechikkan to'lovlarni olish
       const result = await Contract.aggregate([
         {
-          $match: {
-            isActive: true,
-            isDeleted: false,
-            status: "active", // ✅ TUZATILDI: kichik harflar bilan
-            nextPaymentDate: { $lte: today }, // ✅ Tanlangan sanagacha bo'lgan kechikkan to'lovlar
-          },
+          $match: matchCondition,
         },
         {
           $lookup: {
@@ -149,7 +170,7 @@ class CustomerService {
             delayDays: {
               $floor: {
                 $divide: [
-                  { $subtract: [today, "$nextPaymentDate"] },
+                  { $subtract: [new Date(), "$nextPaymentDate"] },
                   1000 * 60 * 60 * 24, // milliseconds to days
                 ],
               },
