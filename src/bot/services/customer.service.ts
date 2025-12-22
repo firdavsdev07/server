@@ -208,7 +208,7 @@ class CustomerService {
             delayDays: {
               $floor: {
                 $divide: [
-                  { $subtract: [new Date(), "$nextPaymentDate"] },
+                  { $subtract: [today, "$nextPaymentDate"] },
                   1000 * 60 * 60 * 24,
                 ],
               },
