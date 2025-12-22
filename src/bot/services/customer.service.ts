@@ -59,61 +59,33 @@ class CustomerService {
       // ✅ YANGI LOGIKA: Agar filterDate berilmagan bo'lsa, barcha qarzdorlarni qaytarish
       const isShowAll = !filterDate;
 
-      let matchCondition: any = {
-        isActive: true,
-        isDeleted: false,
-        status: "active",
-      };
-
       // ✅ Bugungi sana (kechikkan to'lovlar uchun)
       const today = new Date();
       today.setHours(23, 59, 59, 999);
 
-      // ✅ delayDays hisoblash uchun sana (pipeline ichida ishlatish uchun)
+      // ✅ delayDays hisoblash uchun sana
       let delayCalculationDate = today;
+      let filterEndDate = today;
 
       if (!isShowAll && filterDate) {
-        // ✅ YANGI: Tanlangan sana (masalan, 21-dekabr) - 1-dekabrdan 21-dekabrgacha filterlash
-        const selectedDate = new Date(filterDate + 'T00:00:00.000Z'); // ✅ UTC format
-        
-        // Oy boshini hisoblash (masalan, 2024-12-01 00:00:00)
-        const monthStart = new Date(selectedDate);
-        monthStart.setUTCDate(1);
-        monthStart.setUTCHours(0, 0, 0, 0);
-        
-        // Tanlangan sanani (masalan, 2024-12-21 23:59:59)
-        const monthEnd = new Date(selectedDate);
-        monthEnd.setUTCHours(23, 59, 59, 999);
+        // ✅ TUZATILDI: Tanlangan sanagacha BARCHA kechikkan to'lovlar
+        // Masalan 23-dekabr tanlansa: 18-okt, 18-noy, 18-dek - barchasi ko'rsatiladi
+        const selectedDate = new Date(filterDate + 'T23:59:59.999Z');
 
-        // ✅ delayDays hisoblash uchun: tanlangan sana yoki bugun (qaysi kichik bo'lsa)
-        delayCalculationDate = new Date(Math.min(monthEnd.getTime(), today.getTime()));
+        // Filter end date: tanlangan sana yoki bugun (qaysi kichik bo'lsa)
+        filterEndDate = new Date(Math.min(selectedDate.getTime(), today.getTime()));
+        delayCalculationDate = filterEndDate;
 
-        logger.debug("📅 Filter by DATE RANGE (1st to selected date):", {
-          monthStart: monthStart.toISOString(),
-          monthEnd: monthEnd.toISOString(),
+        logger.debug("📅 Filter: ALL overdue payments up to selected date:", {
+          filterEndDate: filterEndDate.toISOString(),
           today: today.toISOString(),
           delayCalculationDate: delayCalculationDate.toISOString(),
           originalDate: filterDate,
-          filterType: "from_month_start_to_selected_date"
+          filterType: "all_overdue_up_to_date"
         });
-
-        // ✅ TUZATILDI: nextPaymentDate tanlangan oyning 1-kunidan tanlangan kungacha bo'lishi kerak
-        // Va BUGUNGI kunda yoki undan OLDIN bo'lishi kerak (kechikkan va bugungi to'lovlar)
-        matchCondition.nextPaymentDate = { 
-          $gte: monthStart, // >= 2024-12-01 00:00:00
-          $lte: delayCalculationDate    // <= min(monthEnd, today)
-        };
-        
-        logger.debug("🔍 Final date filter:", {
-          gte: matchCondition.nextPaymentDate.$gte.toISOString(),
-          lte: matchCondition.nextPaymentDate.$lte.toISOString(),
-        });
-      } else {
-        // ✅ Barcha kechikkan to'lovlar (filterDate yo'q bo'lsa)
-        matchCondition.nextPaymentDate = { $lte: today };
       }
 
-      logger.debug("🔍 Match condition:", JSON.stringify(matchCondition, null, 2));
+      logger.debug("🔍 Will filter payments with date <= " + filterEndDate.toISOString());
 
       // Debug: Barcha shartnomalarni sanash
       const totalContracts = await Contract.countDocuments({
@@ -123,11 +95,18 @@ class CustomerService {
       });
       logger.debug("📊 Total active contracts:", totalContracts);
 
-      // To'g'ridan-to'g'ri Contract'lardan kechikkan to'lovlarni olish
+      // ✅ TUZATILDI: Individual PAYMENTS orqali filter
+      // Contract.nextPaymentDate emas, payment.date <= filterEndDate va isPaid = false
       const result = await Contract.aggregate([
+        // 1. Barcha aktiv shartnomalarni olish (hali filter yo'q)
         {
-          $match: matchCondition,
+          $match: {
+            isActive: true,
+            isDeleted: false,
+            status: "active",
+          },
         },
+        // 2. Customer bilan birlashtirish
         {
           $lookup: {
             from: "customers",
@@ -144,6 +123,7 @@ class CustomerService {
             "customer.isDeleted": false,
           },
         },
+        // 3. Payments bilan birlashtirish
         {
           $lookup: {
             from: "payments",
@@ -152,8 +132,23 @@ class CustomerService {
             as: "paymentDetails",
           },
         },
+        // 4. ✅ YANGI: Kechikkan to'lovlarni filterlash (tanlangan sanagacha)
         {
           $addFields: {
+            // Tanlangan sanagacha bo'lgan TO'LANMAGAN to'lovlar
+            overduePayments: {
+              $filter: {
+                input: "$paymentDetails",
+                as: "p",
+                cond: {
+                  $and: [
+                    { $eq: ["$$p.isPaid", false] },           // To'lanmagan
+                    { $lte: ["$$p.date", filterEndDate] }     // Tanlangan sanagacha
+                  ]
+                }
+              }
+            },
+            // To'langan summani hisoblash
             totalPaid: {
               $sum: {
                 $map: {
@@ -169,52 +164,54 @@ class CustomerService {
                 },
               },
             },
-            // ✅ YANGI: To'lanmagan to'lovlarning eng yaqin sanasini topish
-            actualNextPaymentDate: {
-              $min: {
-                $map: {
-                  input: {
-                    $filter: {
-                      input: "$paymentDetails",
-                      as: "p",
-                      cond: { $eq: ["$$p.isPaid", false] }, // ✅ Faqat to'lanmaganlar!
-                    },
-                  },
-                  as: "unpaid",
-                  in: "$$unpaid.date",
-                },
-              },
-            },
           },
         },
+        // 5. ✅ YANGI: Faqat kechikkan to'lovlari bor shartnomalar
+        {
+          $match: {
+            "overduePayments.0": { $exists: true }  // Kamida 1 ta kechikkan to'lov
+          }
+        },
+        // 6. Qolgan qarz va eng eski kechikkan sanani hisoblash
         {
           $addFields: {
             remainingDebt: {
               $subtract: ["$totalPrice", "$totalPaid"],
             },
-            // ✅ Contract.nextPaymentDate emas, payment'lardan hisoblangan sanani ishlatamiz
-            nextPaymentDate: { $ifNull: ["$actualNextPaymentDate", "$nextPaymentDate"] },
+            // Eng eski to'lanmagan to'lov sanasi (delayDays uchun)
+            oldestOverdueDate: {
+              $min: "$overduePayments.date"
+            },
+            // Kechikkan to'lovlar soni
+            overduePaymentsCount: {
+              $size: "$overduePayments"
+            },
+            // Kechikkan to'lovlar summasi
+            overdueAmount: {
+              $sum: "$overduePayments.amount"
+            }
           },
         },
-        // Faqat qarzi bor shartnomalar
+        // 7. Faqat qarzi bor shartnomalar
         {
           $match: {
             remainingDebt: { $gt: 0 },
           },
         },
-        // ✅ Har bir shartnoma uchun kechikish kunlarini hisoblash
+        // 8. Kechikish kunlarini hisoblash
         {
           $addFields: {
             delayDays: {
               $floor: {
                 $divide: [
-                  { $subtract: [today, "$nextPaymentDate"] },
+                  { $subtract: [delayCalculationDate, "$oldestOverdueDate"] },
                   1000 * 60 * 60 * 24,
                 ],
               },
             },
           },
         },
+        // 9. Mijozlar bo'yicha guruhlash
         {
           $group: {
             _id: "$customer._id",
@@ -223,37 +220,30 @@ class CustomerService {
             phoneNumber: { $first: "$customer.phoneNumber" },
             totalDebt: { $sum: "$remainingDebt" },
             contractsCount: { $sum: 1 },
-            maxNextPaymentDate: { $max: "$nextPaymentDate" }, // ✅ Eng katta (eng yaqin) nextPaymentDate
-            minNextPaymentDate: { $min: "$nextPaymentDate" }, // ✅ Eng kichik (eng eski) nextPaymentDate
+            // Eng eski kechikkan sana (barcha shartnomalar bo'yicha)
+            oldestOverdueDate: { $min: "$oldestOverdueDate" },
+            // Jami kechikkan to'lovlar soni
+            totalOverduePayments: { $sum: "$overduePaymentsCount" },
+            // Jami kechikkan summa
+            totalOverdueAmount: { $sum: "$overdueAmount" },
           },
         },
-        // ✅ TUZATILDI: delayDays ni to'g'ri hisoblash
-        // - isShowAll bo'lsa: eng ESKI to'lovdan kechikish (minNextPaymentDate - eng ko'p kechikkan)
-        // - filterDate bo'lsa: filter ichidagi eng YAQIN to'lovdan kechikish (minNextPaymentDate)
+        // 10. Final delayDays hisoblash
         {
           $addFields: {
             delayDays: {
               $floor: {
                 $divide: [
-                  { 
-                    $subtract: [
-                      delayCalculationDate, // ✅ Pipeline dan oldin hisoblangan sana
-                      "$minNextPaymentDate" // ✅ Har doim minNextPaymentDate ishlatamiz
-                    ] 
-                  },
+                  { $subtract: [delayCalculationDate, "$oldestOverdueDate"] },
                   1000 * 60 * 60 * 24,
                 ],
               },
             },
           },
         },
-        // ✅ TUZATILDI: Sorting logikasi
-        // - isShowAll: eng ko'p kechikkan mijozlar birinchi (delayDays bo'yicha kamayish)
-        // - filterDate berilganda: ENG YAQIN to'lovlar birinchi (21→20→19→...→1-dekabr)
-        { 
-          $sort: isShowAll 
-            ? { delayDays: -1 } // Barcha qarzdorlar - eng ko'p kechikkan birinchi
-            : { minNextPaymentDate: -1 } // ✅ Eng yaqin (21-dekabr) → eng uzoq (1-dekabr)
+        // 11. Sorting: eng ko'p kechikkanlar birinchi
+        {
+          $sort: { delayDays: -1 }
         },
       ]);
 
@@ -710,7 +700,7 @@ class CustomerService {
     if (allContracts.length > 0) {
       const firstContract = allContracts[0];
       const pendingPayments = firstContract.payments?.filter((p: any) => p.status === 'PENDING') || [];
-      
+
       logger.debug("📋 First Contract Details:", {
         _id: firstContract._id,
         productName: firstContract.productName,
@@ -875,7 +865,7 @@ class CustomerService {
     // ✅ YANGI: Shartnomalarni tugallanganlik bo'yicha kategoriyalash
     const completedContracts = allContracts.filter((c) => c.isCompleted === true);
     const activeContracts = allContracts.filter((c) => c.isCompleted === false);
-    
+
     const paidContracts = debtorContractsRaw.filter((c) => c.isPaid === true);
     const debtorContracts = debtorContractsRaw.filter(
       (c) => c.isPaid === false
