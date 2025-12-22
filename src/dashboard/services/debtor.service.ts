@@ -2,22 +2,13 @@ import BaseError from "../../utils/base.error";
 import Contract, { ContractStatus } from "../../schemas/contract.schema";
 import IJwtUser from "../../types/user";
 import { Debtor } from "../../schemas/debtor.schema";
-import Payment from "../../schemas/payment.schema";
+import Payment, { PaymentType } from "../../schemas/payment.schema";
 import logger from "../../utils/logger";
 
 class DebtorService {
   /**
    * Qarzdorlarni ko'rish (Mijozlar bo'yicha guruhlangan)
    * Requirements: 7.2
-   *
-   * LOGIKA:
-   * - Barcha faol shartnomalarni mijozlar bo'yicha guruhlaydi
-   * - Har bir mijoz uchun:
-   *   - Faol shartnomalar soni
-   *   - Umumiy narx (barcha shartnomalar)
-   *   - To'langan summa (barcha shartnomalar)
-   *   - Qoldiq summa (barcha shartnomalar)
-   *   - Keyingi to'lov sanasi (eng yaqin)
    */
   async getDebtors() {
     try {
@@ -122,7 +113,7 @@ class DebtorService {
             activeContractsCount: 1,
           },
         },
-        { $sort: { totalDebt: -1 } },
+        { $sort: { remainingDebt: -1 } },
       ]);
       return debtors;
     } catch (error) {
@@ -134,11 +125,6 @@ class DebtorService {
   /**
    * Muddati o'tgan shartnomalarni olish (Qarzdorliklar)
    * Requirements: 3.1
-   *
-   * LOGIKA:
-   * - Faqat muddati o'tgan shartnomalarni ko'rsatadi (nextPaymentDate < bugun)
-   * - Agar sana oralig'i berilsa, o'sha oralig'dagi muddati o'tgan shartnomalar
-   * - Agar sana berilmasa, bugungi kungacha muddati o'tgan barcha shartnomalar
    */
   async getContract(startDate: string, endDate: string) {
     try {
@@ -158,7 +144,6 @@ class DebtorService {
             isActive: true,
             isDeclare: false,
             status: ContractStatus.ACTIVE,
-            // Agarda filtr bo'lsa, nextPaymentDate filtrDate dan kichik bo'lgan hammani olamiz
             nextPaymentDate: { $lte: filterDate }
           },
         },
@@ -195,7 +180,7 @@ class DebtorService {
         },
         {
           $addFields: {
-            // ✅ Tanlangan oydagi "Kutilayotgan to'lov sanasi" (Virtual Due Date)
+            // ✅ Tanlangan oydagi kutilayotgan to'lov sanasi (Virtual Due Date)
             virtualDueDate: {
               $dateFromParts: {
                 year: { $year: filterDate },
@@ -223,53 +208,57 @@ class DebtorService {
                   }
                 }
               }
-            },
-            // ✅ Eng birinchi muddati o'tgan to'lov (standart holat uchun)
-            firstOverduePaymentDate: {
-              $let: {
-                vars: {
-                  overduePayments: {
-                    $filter: {
-                      input: "$paymentDetails",
-                      as: "p",
-                      cond: {
-                        $and: [
-                          { $eq: ["$$p.isPaid", false] },
-                          { $lt: ["$$p.date", today] },
-                        ],
-                      },
-                    },
-                  },
-                },
-                in: { $min: "$$overduePayments.date" }
-              }
             }
           }
         },
+        // ✅ ASOSIY FILTR: Agar filtr bo'lsa, faqat shu oy uchun qarzdorlikni ko'rsat
         {
-          $addFields: {
-            // ✅ Qaysi sanadan boshlab kechikishni hisoblaymiz?
-            effectiveStartDate: {
+          $match: {
+            $expr: {
               $cond: [
-                { $and: [{ $literal: isFiltered }, { $lt: ["$virtualDueDate", filterDate] }] },
-                "$virtualDueDate", // Filtr bo'lsa -> Oylik rejadan (masalan 18-dekabr)
-                { $ifNull: ["$firstOverduePaymentDate", "$nextPaymentDate"] } // Filtr bo'lmasa -> Haqiqiy eng birinchi qarzdorlikdan
+                { $literal: isFiltered },
+                // Filtr bo'lsa: virtualDueDate <= filterDate VA to'lov qilinmagan
+                {
+                  $and: [
+                    { $lte: ["$virtualDueDate", filterDate] },
+                    { $eq: ["$isPaidForTargetMonth", false] }
+                  ]
+                },
+                // Filtr bo'lmasa: nextPaymentDate o'tgan
+                { $lte: ["$nextPaymentDate", filterDate] }
               ]
             }
           }
         },
         {
           $addFields: {
-            // ✅ Yakuniy kechikkan kunlar
+            // ✅ Kechikkan kunlarni hisoblash
             delayDays: {
-              $max: [
-                0,
+              $cond: [
+                { $literal: isFiltered },
                 {
-                  $dateDiff: {
-                    startDate: "$effectiveStartDate",
-                    endDate: filterDate,
-                    unit: "day",
-                  },
+                  $max: [
+                    0,
+                    {
+                      $dateDiff: {
+                        startDate: "$virtualDueDate",
+                        endDate: filterDate,
+                        unit: "day",
+                      },
+                    }
+                  ]
+                },
+                {
+                  $max: [
+                    0,
+                    {
+                      $dateDiff: {
+                        startDate: "$nextPaymentDate",
+                        endDate: today,
+                        unit: "day",
+                      },
+                    }
+                  ]
                 }
               ]
             },
@@ -328,40 +317,22 @@ class DebtorService {
 
   /**
    * Qarzdorlarni e'lon qilish (manual)
-   * Requirements: 3.1
    */
   async declareDebtors(user: IJwtUser, contractIds: string[]) {
     try {
       logger.debug("📢 === DECLARING DEBTORS (MANUAL) ===");
-
-      const contracts = await Contract.find({
-        _id: { $in: contractIds },
-      });
-
+      const contracts = await Contract.find({ _id: { $in: contractIds } });
       if (contracts.length === 0) {
-        throw BaseError.BadRequest(
-          "E'lon qilish uchun mos qarzdorliklar topilmadi"
-        );
+        throw BaseError.BadRequest("E'lon qilish uchun mos qarzdorliklar topilmadi");
       }
-
       let createdCount = 0;
-
       for (const contract of contracts) {
         contract.isDeclare = true;
         await contract.save();
-
-        // Debtor yaratishdan oldin mavjudligini tekshirish
-        const existingDebtor = await Debtor.findOne({
-          contractId: contract._id,
-        });
-
+        const existingDebtor = await Debtor.findOne({ contractId: contract._id });
         if (!existingDebtor) {
           const today = new Date();
-          const overdueDays = Math.floor(
-            (today.getTime() - contract.nextPaymentDate.getTime()) /
-            (1000 * 60 * 60 * 24)
-          );
-
+          const overdueDays = Math.floor((today.getTime() - contract.nextPaymentDate.getTime()) / (1000 * 60 * 60 * 24));
           await Debtor.create({
             contractId: contract._id,
             debtAmount: contract.monthlyPayment,
@@ -369,13 +340,9 @@ class DebtorService {
             overdueDays: Math.max(0, overdueDays),
             createBy: user.sub,
           });
-
           createdCount++;
         }
       }
-
-      logger.debug(`✅ Created ${createdCount} debtors`);
-
       return { message: "Qarzdorlar e'lon qilindi.", created: createdCount };
     } catch (error) {
       logger.error("❌ Error declaring debtors:", error);
@@ -385,14 +352,11 @@ class DebtorService {
 
   /**
    * Avtomatik qarzdorlar yaratish (har kecha 00:00)
-   * Requirements: 3.1, 3.5
    */
   async createOverdueDebtors() {
     try {
       logger.debug("🤖 === AUTOMATIC DEBTOR CREATION ===");
       const today = new Date();
-
-      // Muddati o'tgan shartnomalarni topish
       const overdueContracts = await Contract.find({
         isActive: true,
         isDeleted: false,
@@ -400,31 +364,11 @@ class DebtorService {
         status: ContractStatus.ACTIVE,
         nextPaymentDate: { $lte: today },
       });
-
-      logger.debug(`📋 Found ${overdueContracts.length} overdue contracts`);
-
       let createdCount = 0;
-
       for (const contract of overdueContracts) {
-        // Ushbu shartnoma uchun mavjud Debtor'ni tekshirish
-        const existingDebtor = await Debtor.findOne({
-          contractId: contract._id,
-        });
-
+        const existingDebtor = await Debtor.findOne({ contractId: contract._id });
         if (!existingDebtor) {
-          const overdueDays = Math.floor(
-            (today.getTime() - contract.nextPaymentDate.getTime()) /
-            (1000 * 60 * 60 * 24)
-          );
-
-          logger.debug(`📊 Contract ${contract._id}:`);
-          logger.debug(`   Today: ${today.toISOString().split("T")[0]}`);
-          logger.debug(
-            `   Next Payment: ${contract.nextPaymentDate.toISOString().split("T")[0]
-            }`
-          );
-          logger.debug(`   Overdue Days: ${overdueDays}`);
-
+          const overdueDays = Math.floor((today.getTime() - contract.nextPaymentDate.getTime()) / (1000 * 60 * 60 * 24));
           await Debtor.create({
             contractId: contract._id,
             debtAmount: contract.monthlyPayment,
@@ -432,15 +376,9 @@ class DebtorService {
             overdueDays: Math.max(0, overdueDays),
             createBy: contract.createBy,
           });
-
           createdCount++;
-          logger.debug(`✅ Debtor created for contract: ${contract._id}`);
         }
       }
-
-      logger.debug(
-        `🎉 Created ${createdCount} new debtors for overdue contracts`
-      );
       return { created: createdCount };
     } catch (error) {
       logger.error("❌ Error creating overdue debtors:", error);
