@@ -160,6 +160,7 @@ class DebtorService {
 
       logger.debug("📅 Qarzdorliklar filter:", {
         today: today.toISOString().split("T")[0],
+        todayFull: today.toISOString(),
         dateFilter,
       });
 
@@ -239,21 +240,29 @@ class DebtorService {
         {
           $addFields: {
             // ✅ TUZATISH: To'lanmagan eng birinchi oyni topish uchun payment'larni tekshirish
-            firstUnpaidPaymentDate: {
+            // ❌ESKI MUAMMO: Bu birinchi to'lanmagan to'lovni topadi, lekin bugungi sanaga nisbatan kechikishni hisoblaydi
+            // ✅ YANGI YECHIM: Faqat kechikkan (muddati o'tgan) to'lanmagan to'lovlarni topish
+            firstOverduePaymentDate: {
               $let: {
                 vars: {
-                  unpaidPayments: {
+                  // Faqat to'lanmagan VA muddati o'tgan to'lovlar
+                  overduePayments: {
                     $filter: {
                       input: "$paymentDetails",
                       as: "p",
-                      cond: { $eq: ["$$p.isPaid", false] },
+                      cond: {
+                        $and: [
+                          { $eq: ["$$p.isPaid", false] },
+                          { $lt: ["$$p.date", today] }, // ✅ Faqat muddati o'tgan
+                        ],
+                      },
                     },
                   },
                 },
                 in: {
                   $min: {
                     $map: {
-                      input: "$$unpaidPayments",
+                      input: "$$overduePayments",
                       as: "up",
                       in: "$$up.date",
                     },
@@ -265,10 +274,10 @@ class DebtorService {
         },
         {
           $addFields: {
-            // Agar to'lanmagan to'lovlar bo'lsa, eng birinchisidan hisoblash
-            // Aks holda nextPaymentDate dan hisoblash
+            // ✅ YANGI: Faqat kechikkan to'lovlar bo'lsa, eng birinchisidan hisoblash
+            // Aks holda nextPaymentDate dan hisoblash (eski logika)
             effectivePaymentDate: {
-              $ifNull: ["$firstUnpaidPaymentDate", "$nextPaymentDate"],
+              $ifNull: ["$firstOverduePaymentDate", "$nextPaymentDate"],
             },
           },
         },

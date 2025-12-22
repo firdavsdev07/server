@@ -250,7 +250,7 @@ class ExcelImportService {
       });
 
       logger.debug(`✅ Created new customer: ${firstName} ${lastName}`);
-      
+
       // 🔍 AUDIT LOG: Customer yaratish
       try {
         await auditLogService.logCustomerCreate(
@@ -328,14 +328,14 @@ class ExcelImportService {
   ): number {
     const paymentDate = dayjs(`${paymentYear}-${paymentMonth}-01`);
     const contractStartMonth = dayjs(contractStartDate).startOf("month");
-    
+
     // Oy farqi (0 = shu oy, 1 = keyingi oy, 2 = ikkinchi oy, ...)
     const monthsDiff = paymentDate.diff(contractStartMonth, "month");
-    
+
     // monthsDiff = 0 -> targetMonth = 1 (shartnoma oyidagi to'lov)
     // monthsDiff = 1 -> targetMonth = 1 (birinchi oylik to'lov)
     // monthsDiff = 2 -> targetMonth = 2 (ikkinchi oylik to'lov)
-    
+
     return Math.max(1, monthsDiff);
   }
 
@@ -374,8 +374,8 @@ class ExcelImportService {
         logger.debug("    ✅ Contract status: ACTIVE");
       }
 
-      // nextPaymentDate hisoblash
-      // Oxirgi to'langan oylik to'lovni topish
+      // ✅ TUZATISH: nextPaymentDate va originalPaymentDay ni to'g'ri hisoblash
+      // Eng oxirgi to'langan oyni topish
       const paidMonthlyPayments = (contract.payments as any[])
         .filter(
           (p: any) =>
@@ -383,31 +383,42 @@ class ExcelImportService {
             p.paymentType === "monthly" &&
             p.targetMonth &&
             p.targetMonth > 0
-        )
-        .sort((a: any, b: any) => (b.targetMonth || 0) - (a.targetMonth || 0));
+        );
 
-      if (paidMonthlyPayments.length > 0) {
-        const lastPaidPayment = paidMonthlyPayments[0];
-        const lastTargetMonth = lastPaidPayment.targetMonth;
+      // Eng oxirgi to'langan oy
+      const lastPaidMonth = paidMonthlyPayments.length > 0
+        ? Math.max(...paidMonthlyPayments.map((p: any) => p.targetMonth || 0))
+        : 0;
 
-        // Keyingi oy = lastTargetMonth + 1
-        const nextMonth = lastTargetMonth + 1;
+      logger.debug(`    📅 Paid monthly payments: ${paidMonthlyPayments.length}`);
+      logger.debug(`    📅 Last paid month: ${lastPaidMonth}`);
 
-        // Shartnoma boshidan nextMonth oy keyin
+      // Keyingi to'lov oyi
+      const nextPaymentMonth = lastPaidMonth + 1;
+
+      // ✅ YANGI: originalPaymentDay ni o'rnatish (agar mavjud bo'lmasa)
+      const originalDay = contract.originalPaymentDay || dayjs(startDate).date();
+      if (!contract.originalPaymentDay) {
+        contract.originalPaymentDay = originalDay;
+        logger.debug(`    📅 originalPaymentDay set: ${originalDay}`);
+      }
+
+      // Agar barcha oylar to'langan bo'lmasa, nextPaymentDate yangilash
+      if (nextPaymentMonth <= contract.period) {
+        // ✅ TUZATISH: startDate dan nextPaymentMonth oy qo'shish
+        // Misol: startDate = 2025-06-17, lastPaidMonth = 5, nextPaymentMonth = 6
+        // nextPaymentDate = 2025-06-17 + 6 oy = 2025-12-17
         const nextPaymentDate = dayjs(startDate)
-          .add(nextMonth - 1, "month")
+          .add(nextPaymentMonth, "month")
+          .date(originalDay)
           .toDate();
 
         contract.nextPaymentDate = nextPaymentDate;
 
-        logger.debug(
-          `    📅 Last paid month: ${lastTargetMonth}, Next payment month: ${nextMonth}`
-        );
-        logger.debug(
-          `    📅 nextPaymentDate: ${dayjs(nextPaymentDate).format(
-            "YYYY-MM-DD"
-          )}`
-        );
+        logger.debug(`    📅 Next payment month: ${nextPaymentMonth}`);
+        logger.debug(`    📅 nextPaymentDate: ${dayjs(nextPaymentDate).format("YYYY-MM-DD")}`);
+      } else {
+        logger.debug("    ✅ All payments completed, no next payment date");
       }
 
       // Shartnomani saqlash
@@ -453,9 +464,8 @@ class ExcelImportService {
       }
       if (remainder > 0.01) {
         note += `\n💰 Qoldiq: ${remainder.toFixed(2)}$\n`;
-        note += `   Keyingi oy (${
-          baseTargetMonth + monthsCount
-        }-oy)ga qo'llanadi\n`;
+        note += `   Keyingi oy (${baseTargetMonth + monthsCount
+          }-oy)ga qo'llanadi\n`;
       }
       note += `\n👉 Bu to'lov - ${splitIndex + 1}/${monthsCount} qism\n`;
     } else {
@@ -502,10 +512,10 @@ class ExcelImportService {
 
     // ✅ YANGI: Barcha Excel to'lovlarning jami summasi
     const totalExcelPayments = monthlyPayments.reduce((sum, p) => sum + p.amount, 0);
-    const isContractFullyPaid = totalContractPrice 
+    const isContractFullyPaid = totalContractPrice
       ? (totalExcelPayments >= totalContractPrice * 0.99) // 1% xatolik margin
       : false;
-    
+
     logger.debug(`\n  📊 YANGI ALGORITM - TENG TAQSIMLASH`);
     logger.debug(`  📊 Total Excel payments: ${totalExcelPayments}$`);
     logger.debug(`  📊 Total contract price: ${totalContractPrice || 'N/A'}$`);
@@ -542,7 +552,7 @@ class ExcelImportService {
       // Excel to'lovni oylik to'lovlarga bo'lish
       while (excelAmountToProcess >= expectedMonthlyPayment * 0.95 && currentMonthIndex <= (period || 12)) {
         const amountForThisMonth = Math.min(excelAmountToProcess, expectedMonthlyPayment);
-        
+
         paymentMonthMapping.push({
           monthIndex: currentMonthIndex,
           expectedAmount: expectedMonthlyPayment,
@@ -561,7 +571,7 @@ class ExcelImportService {
 
       // Qoldiq summani saqlash
       remainingExcelAmount = excelAmountToProcess;
-      
+
       if (remainingExcelAmount > 0.01) {
         logger.debug(`    💰 Qoldiq keyingi Excel to'lovga: ${remainingExcelAmount.toFixed(2)}$`);
       }
@@ -573,7 +583,7 @@ class ExcelImportService {
     if (remainingExcelAmount > 0.01) {
       // Qoldiq initialPayment ga teng yoki yaqinmi? (masalan: 150$)
       const isInitialPaymentRemainder = initialPayment && Math.abs(remainingExcelAmount - initialPayment) < 1;
-      
+
       if (isInitialPaymentRemainder) {
         // ✅ Bu boshlang'ich to'lov qiymati, ignor qilamiz
         // Chunki initial payment alohida yaratilgan
@@ -586,7 +596,7 @@ class ExcelImportService {
           monthIndex: currentMonthIndex,
           expectedAmount: expectedMonthlyPayment,
           paidAmount: remainingExcelAmount,
-          paidDate: monthlyPayments[monthlyPayments.length - 1] 
+          paidDate: monthlyPayments[monthlyPayments.length - 1]
             ? dayjs(`${monthlyPayments[monthlyPayments.length - 1].year}-${monthlyPayments[monthlyPayments.length - 1].month}-${contractDay}`).toDate()
             : new Date(),
           status: isContractFullyPaid ? 'PAID' : 'UNDERPAID'
@@ -601,8 +611,15 @@ class ExcelImportService {
 
     // ✅ YANGI: paymentMonthMapping asosida Payment yaratish
     for (const monthPayment of paymentMonthMapping) {
-      const paymentDate = dayjs(contractStartDate).add(monthPayment.monthIndex - 1, 'month').toDate();
-      
+      // ✅ TUZATISH: Belgilangan to'lov sanasi = startDate + monthIndex oy
+      // Misol: startDate = 2025-06-17, monthIndex = 1 → 2025-07-17 (1-oy to'lovi)
+      // Misol: startDate = 2025-06-17, monthIndex = 6 → 2025-12-17 (6-oy to'lovi)
+      const contractDay = dayjs(contractStartDate).date();
+      const paymentDate = dayjs(contractStartDate)
+        .add(monthPayment.monthIndex, 'month')
+        .date(contractDay)
+        .toDate();
+
       const noteText = `${monthPayment.monthIndex}-oy to'lovi - ${dayjs(monthPayment.paidDate).format('DD.MM.YYYY')}\n${monthPayment.paidAmount.toFixed(2)}$`;
 
       const notes = await Notes.create({
@@ -622,8 +639,8 @@ class ExcelImportService {
         notes: notes._id,
         status: monthPayment.status === 'PAID' ? PaymentStatus.PAID : PaymentStatus.UNDERPAID,
         expectedAmount: monthPayment.expectedAmount,
-        remainingAmount: monthPayment.status === 'UNDERPAID' 
-          ? monthPayment.expectedAmount - monthPayment.paidAmount 
+        remainingAmount: monthPayment.status === 'UNDERPAID'
+          ? monthPayment.expectedAmount - monthPayment.paidAmount
           : 0,
         confirmedAt: monthPayment.paidDate,
         confirmedBy: managerId,
@@ -643,7 +660,7 @@ class ExcelImportService {
           "monthly",
           monthPayment.monthIndex,
           managerId.toString(),
-          { 
+          {
             source: "excel_import",
             fileName: "excel_import",
             actualAmount: monthPayment.paidAmount,
@@ -736,11 +753,11 @@ class ExcelImportService {
         // ✅ YANGI: totalPrice validatsiyasi va qayta hisoblash
         // Hisoblangan qiymat: initialPayment + (monthlyPayment × period)
         const calculatedTotalPrice = initialPayment + (monthlyPayment * period);
-        
+
         // Farqni tekshirish (1$ dan kam bo'lsa - Excel qiymatini ishlatamiz)
         const priceDifference = Math.abs(excelTotalPrice - calculatedTotalPrice);
         let finalTotalPrice = excelTotalPrice;
-        
+
         if (priceDifference > 1) {
           // ⚠️ Katta farq bor - hisoblangan qiymatni ishlatamiz
           logger.debug(`  ⚠️ WARNING: TotalPrice mismatch!`);
@@ -843,11 +860,11 @@ class ExcelImportService {
         const contractDay = dayjs(contractData.startDate).date();
         let detailedNotes = `📊 EXCEL'DAN IMPORT QILINGAN\n`;
         detailedNotes += `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-        
+
         // Boshlang'ich to'lov
         detailedNotes += `💰 Boshlang'ich to'lov:\n`;
         detailedNotes += `   ${contractData.initialPayment.toFixed(2)}$ (${dayjs(contractData.startDate).format('DD.MM.YYYY')})\n\n`;
-        
+
         // Oylik to'lovlar
         if (monthlyPayments.length > 0) {
           detailedNotes += `📅 Oylik to'lovlar:\n`;
@@ -858,12 +875,12 @@ class ExcelImportService {
           const totalMonthlyPayments = monthlyPayments.reduce((sum, p) => sum + p.amount, 0);
           detailedNotes += `\n✅ Jami: ${contractData.totalPrice.toFixed(2)}$ (${contractData.initialPayment.toFixed(2)}$ + ${totalMonthlyPayments.toFixed(2)}$)\n`;
         }
-        
+
         // Agar user o'z izohi bo'lsa
         if (contractData.notes && contractData.notes.trim()) {
           detailedNotes += `\n📝 Qo'shimcha izoh:\n${contractData.notes}`;
         }
-        
+
         // Notes'ni yangilash
         notes.text = detailedNotes;
         await notes.save();
@@ -934,7 +951,7 @@ class ExcelImportService {
           // ⚠️ TUZATILDI: Balance'ni yangilamaymiz (ikki marta hisoblash oldini olish)
           // Sabab: totalPrice = initialPayment + (monthlyPayment * period)
           // Faqat oylik to'lovlar balance ga qo'shiladi
-          
+
           logger.debug(
             `  ✓ Initial payment created: ${contractData.initialPayment}$ (NOT added to balance)`
           );
@@ -963,14 +980,14 @@ class ExcelImportService {
     // 🔍 AUDIT LOG: Excel import yakunlandi
     const fileName = filePath.split('/').pop() || 'unknown.xlsx';
     const totalRows = rows.length;
-    
+
     // Affected entities ni yig'ish (bu yerda oddiy hisobot)
     const affectedEntities: {
       entityType: string;
       entityId: string;
       entityName: string;
     }[] = [];
-    
+
     // Success entities qo'shish
     for (let i = 0; i < successCount; i++) {
       affectedEntities.push({
@@ -990,7 +1007,7 @@ class ExcelImportService {
         managerId,
         affectedEntitiesCount: affectedEntities.length
       });
-      
+
       await auditLogService.logExcelImport(
         fileName,
         totalRows,
@@ -999,7 +1016,7 @@ class ExcelImportService {
         managerId,
         affectedEntities
       );
-      
+
       logger.info("✅ Excel Import audit log created successfully");
     } catch (auditError) {
       logger.error("❌ Error creating Excel Import audit log:", auditError);
