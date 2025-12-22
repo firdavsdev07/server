@@ -82,19 +82,28 @@ class CustomerService {
         const monthEnd = new Date(selectedDate);
         monthEnd.setUTCHours(23, 59, 59, 999);
 
-        logger.debug("📅 Filter by DATE RANGE (month start to selected date in SAME month):", {
+        logger.debug("📅 Filter by DATE RANGE (1st to selected date):", {
           monthStart: monthStart.toISOString(),
           monthEnd: monthEnd.toISOString(),
+          today: today.toISOString(),
           originalDate: filterDate,
-          filterType: "date_range_same_month_only"
+          filterType: "from_month_start_to_selected_date"
         });
 
-        // ✅ nextPaymentDate tanlangan oyning 1-kunidan tanlangan kungacha bo'lishi kerak
-        // Va bugundan oldin bo'lishi kerak (kechikkan to'lovlar)
+        // ✅ TUZATILDI: nextPaymentDate tanlangan oyning 1-kunidan tanlangan kungacha bo'lishi kerak
+        // Va BUGUNGI kunda yoki undan OLDIN bo'lishi kerak (kechikkan va bugungi to'lovlar)
         matchCondition.nextPaymentDate = { 
           $gte: monthStart, // >= 2024-12-01 00:00:00
           $lte: monthEnd    // <= 2024-12-21 23:59:59
         };
+        
+        // ✅ Qo'shimcha: Faqat kechikkan yoki bugungi to'lovlar (kelajak to'lovlarni chiqarib tashlash)
+        matchCondition.nextPaymentDate.$lte = new Date(Math.min(monthEnd.getTime(), today.getTime()));
+        
+        logger.debug("🔍 Final date filter:", {
+          gte: matchCondition.nextPaymentDate.$gte.toISOString(),
+          lte: matchCondition.nextPaymentDate.$lte.toISOString(),
+        });
       } else {
         // ✅ Barcha kechikkan to'lovlar (filterDate yo'q bo'lsa)
         matchCondition.nextPaymentDate = { $lte: today };
@@ -193,15 +202,16 @@ class CustomerService {
             delayDays: { $max: "$delayDays" },
             totalDebt: { $sum: "$remainingDebt" },
             contractsCount: { $sum: 1 },
-            maxNextPaymentDate: { $max: "$nextPaymentDate" }, // ✅ Eng katta nextPaymentDate
+            maxNextPaymentDate: { $max: "$nextPaymentDate" }, // ✅ Eng katta (eng yaqin) nextPaymentDate
           },
         },
-        // ✅ YANGI SORTING: Agar filterDate berilgan bo'lsa, nextPaymentDate bo'yicha kamayib borish (20→1)
+        // ✅ YANGI SORTING: Agar filterDate berilgan bo'lsa, nextPaymentDate bo'yicha KAMAYIB borish
+        // 21-dekabr → 20-dekabr → 19-dekabr → ... → 1-dekabr
         // Aks holda, kechikish kunlari bo'yicha kamayib borish
         { 
           $sort: isShowAll 
             ? { delayDays: -1 } // Barcha qarzdorlar - kechikish bo'yicha
-            : { maxNextPaymentDate: -1 } // Filterlangan - sana bo'yicha (20→19→...→1)
+            : { maxNextPaymentDate: -1 } // Filterlangan - sana bo'yicha KAMAYIB (21→20→19→...→1)
         },
       ]);
 
