@@ -145,6 +145,10 @@ class DebtorService {
       const today = new Date();
       today.setHours(0, 0, 0, 0); // Bugungi kunning boshi
 
+      // ✅ YANGI: Hisob-kitob uchun asosiy sana (tanlangan sana yoki bugun)
+      const referenceDate = endDate ? new Date(endDate) : today;
+      referenceDate.setHours(23, 59, 59, 999); // Kun oxirigacha hisoblash
+
       let dateFilter: any = {};
 
       if (startDate && endDate) {
@@ -160,7 +164,7 @@ class DebtorService {
 
       logger.debug("📅 Qarzdorliklar filter:", {
         today: today.toISOString().split("T")[0],
-        todayFull: today.toISOString(),
+        referenceDate: referenceDate.toISOString().split("T")[0],
         dateFilter,
       });
 
@@ -256,7 +260,7 @@ class DebtorService {
                       cond: {
                         $and: [
                           { $eq: ["$$p.isPaid", false] },
-                          { $lt: ["$$p.date", today] }, // ✅ Faqat muddati o'tgan
+                          { $lt: ["$$p.date", referenceDate] }, // ✅ Faqat tanlangan sanagacha muddati o'tgan
                         ],
                       },
                     },
@@ -290,40 +294,27 @@ class DebtorService {
             delayDays: {
               $let: {
                 vars: {
-                  // Agar kalendardan sana tanlangan bo'lsa (endDate), o'sha sanani ishlatamiz
-                  // Aks holda bugungi sanani ishlatamiz
-                  currentReferenceDate: {
-                    $ifNull: [
-                      { $literal: endDate ? new Date(endDate) : null },
-                      new Date()
-                    ]
-                  },
-                  // Agar kalendar tanlangan bo'lsa, o'sha oyning to'lov kunini (originalPaymentDay) aniqlaymiz
-                  // Masalan: originalPaymentDay = 18, tanlangan oy = Dekabr bo'lsa -> 18.12.2025
+                  // Hisob-kitob qilinadigan sana (tanlangan endDate yoki bugun)
+                  refDate: referenceDate,
+                  // ✅ Virtual to'lov kunini hisoblash (tanlangan oydagi 18-sana)
                   virtualDueDate: {
-                    $let: {
-                      vars: {
-                        refDate: { $ifNull: [{ $literal: endDate ? new Date(endDate) : null }, new Date()] }
-                      },
-                      in: {
-                        $dateFromParts: {
-                          year: { $year: "$$refDate" },
-                          month: { $month: "$$refDate" },
-                          day: { $ifNull: ["$originalPaymentDay", { $dayOfMonth: "$startDate" }] },
-                          timezone: "Asia/Tashkent"
-                        }
-                      }
+                    $dateFromParts: {
+                      year: { $year: referenceDate },
+                      month: { $month: referenceDate },
+                      day: { $ifNull: ["$originalPaymentDay", { $dayOfMonth: "$startDate" }] },
+                      timezone: "Asia/Tashkent"
                     }
                   }
                 },
                 in: {
                   $let: {
                     vars: {
-                      // Agar kalendar tanlangan bo'lsa va bu oy uchun to'lov sanasi o'tib ketgan bo'lsa -> virtualDueDate'dan hisobla
-                      // Aks holda haqiqiy eng birinchi kechikkan kundan (effectivePaymentDate) hisobla
-                      calculationStartDate: {
+                      // Agar kalendar tanlangan bo'lsa, kechikishni tanlangan oydagi to'lov kunidan boshlaymiz
+                      // Agar u sanadan o'tmagan bo'lsak, u holda kechikish 0 bo'ladi.
+                      // Aks holda (kalendar yo'q bo'lsa) haqiqiy eng birinchi kechikkan oydan hisoblaymiz.
+                      calcStartDate: {
                         $cond: [
-                          { $and: [{ $literal: !!endDate }, { $gt: ["$$currentReferenceDate", "$$virtualDueDate"] }] },
+                          { $and: [{ $literal: !!endDate }, { $gt: [referenceDate, "$$virtualDueDate"] }] },
                           "$$virtualDueDate",
                           "$effectivePaymentDate"
                         ]
@@ -334,8 +325,8 @@ class DebtorService {
                         0,
                         {
                           $dateDiff: {
-                            startDate: "$$calculationStartDate",
-                            endDate: "$$currentReferenceDate",
+                            startDate: "$$calcStartDate",
+                            endDate: "$$refDate",
                             unit: "day",
                           },
                         }
