@@ -124,36 +124,29 @@ class DebtorService {
 
   /**
    * Muddati o'tgan shartnomalarni olish (Qarzdorliklar)
-   * Requirements: 3.1
+   * Detailed implementation based on the user prompt
    */
   async getContract(startDate: string, endDate: string) {
     try {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      // ✅ Agar endDate berilgan bo'lsa, bu "Kalendar rejimi"
       const filterDate = endDate ? new Date(endDate) : today;
       filterDate.setHours(23, 59, 59, 999);
 
-      // ✅ Muhim: Agar endDate berilgan bo'lsa, filtr yoqilgan hisoblanadi
-      const isFiltered = !!endDate;
-
-      logger.debug("📅 Debtor Filter Debug:", {
-        filterDate: filterDate.toISOString(),
-        isFiltered
-      });
+      const isFiltered = !!(startDate && endDate);
 
       return await Contract.aggregate([
+        // 1. Initial match
         {
           $match: {
             isDeleted: false,
             isActive: true,
             isDeclare: false,
             status: ContractStatus.ACTIVE,
-            // Filtr sanasidan oldingi barcha qarzdorlarni qamrash
-            nextPaymentDate: { $lte: filterDate }
           },
         },
+        // 2. Lookups
         {
           $lookup: {
             from: "customers",
@@ -171,7 +164,12 @@ class DebtorService {
             as: "manager",
           },
         },
-        { $unwind: { path: "$manager", preserveNullAndEmptyArrays: true } },
+        {
+          $unwind: {
+            path: "$manager",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
         {
           $lookup: {
             from: "payments",
@@ -180,9 +178,9 @@ class DebtorService {
             as: "paymentDetails",
           },
         },
+        // 3. Calculate virtualDueDate
         {
           $addFields: {
-            // ✅ Tanlangan oydagi "Virtual Reja Sanasi" (masalan: 18.12.2025)
             virtualDueDate: {
               $dateFromParts: {
                 year: { $year: filterDate },
@@ -190,27 +188,12 @@ class DebtorService {
                 day: { $ifNull: ["$originalPaymentDay", { $dayOfMonth: "$startDate" }] },
                 timezone: "Asia/Tashkent"
               }
-            },
-            // ✅ Shartnoma boshlanganidan beri o'tgan oylar soni (targetMonth ni aniqlash uchun)
-            targetMonthIndex: {
-              $let: {
-                vars: {
-                  diff: {
-                    $dateDiff: {
-                      startDate: "$startDate",
-                      endDate: filterDate,
-                      unit: "month"
-                    }
-                  }
-                },
-                in: "$$diff"
-              }
             }
           }
         },
+        // 4. Check isPaidForTargetMonth
         {
           $addFields: {
-            // ✅ Aynan shu targetMonth (nechanchi oy bo'lsa) to'langanmi?
             isPaidForTargetMonth: {
               $anyElementTrue: {
                 $map: {
@@ -219,7 +202,8 @@ class DebtorService {
                   in: {
                     $and: [
                       { $eq: ["$$p.isPaid", true] },
-                      { $eq: ["$$p.targetMonth", "$targetMonthIndex"] }
+                      { $eq: [{ $year: "$$p.date" }, { $year: filterDate }] },
+                      { $eq: [{ $month: "$$p.date" }, { $month: filterDate }] }
                     ]
                   }
                 }
@@ -227,7 +211,7 @@ class DebtorService {
             }
           }
         },
-        // ✅ FILTRLASH: Kalendar rejimida faqat to'lov kuni kelgan va to'lanmaganlarni qoldirish
+        // 5. New $match stage for month filtering
         {
           $match: {
             $expr: {
@@ -244,9 +228,9 @@ class DebtorService {
             }
           }
         },
+        // 6. Calculate delayDays and other fields
         {
           $addFields: {
-            // ✅ Kechikkan kunlarni hisoblash (Aynan tanlangan kunga nisbatan)
             delayDays: {
               $cond: [
                 { $literal: isFiltered },
@@ -293,13 +277,16 @@ class DebtorService {
             },
           }
         },
+        // 7. Rest of pipeline
         {
           $addFields: {
             remainingDebt: { $subtract: ["$totalPrice", "$totalPaid"] }
           }
         },
         {
-          $match: { remainingDebt: { $gt: 0 } }
+          $match: {
+            remainingDebt: { $gt: 0 }
+          }
         },
         {
           $project: {
@@ -332,11 +319,7 @@ class DebtorService {
    */
   async declareDebtors(user: IJwtUser, contractIds: string[]) {
     try {
-      logger.debug("📢 === DECLARING DEBTORS (MANUAL) ===");
       const contracts = await Contract.find({ _id: { $in: contractIds } });
-      if (contracts.length === 0) {
-        throw BaseError.BadRequest("E'lon qilish uchun mos qarzdorliklar topilmadi");
-      }
       let createdCount = 0;
       for (const contract of contracts) {
         contract.isDeclare = true;
@@ -367,7 +350,6 @@ class DebtorService {
    */
   async createOverdueDebtors() {
     try {
-      logger.debug("🤖 === AUTOMATIC DEBTOR CREATION ===");
       const today = new Date();
       const overdueContracts = await Contract.find({
         isActive: true,
