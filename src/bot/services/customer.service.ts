@@ -69,6 +69,9 @@ class CustomerService {
       const today = new Date();
       today.setHours(23, 59, 59, 999);
 
+      // ✅ delayDays hisoblash uchun sana (pipeline ichida ishlatish uchun)
+      let delayCalculationDate = today;
+
       if (!isShowAll && filterDate) {
         // ✅ YANGI: Tanlangan sana (masalan, 21-dekabr) - 1-dekabrdan 21-dekabrgacha filterlash
         const selectedDate = new Date(filterDate + 'T00:00:00.000Z'); // ✅ UTC format
@@ -82,10 +85,14 @@ class CustomerService {
         const monthEnd = new Date(selectedDate);
         monthEnd.setUTCHours(23, 59, 59, 999);
 
+        // ✅ delayDays hisoblash uchun: tanlangan sana yoki bugun (qaysi kichik bo'lsa)
+        delayCalculationDate = new Date(Math.min(monthEnd.getTime(), today.getTime()));
+
         logger.debug("📅 Filter by DATE RANGE (1st to selected date):", {
           monthStart: monthStart.toISOString(),
           monthEnd: monthEnd.toISOString(),
           today: today.toISOString(),
+          delayCalculationDate: delayCalculationDate.toISOString(),
           originalDate: filterDate,
           filterType: "from_month_start_to_selected_date"
         });
@@ -94,11 +101,8 @@ class CustomerService {
         // Va BUGUNGI kunda yoki undan OLDIN bo'lishi kerak (kechikkan va bugungi to'lovlar)
         matchCondition.nextPaymentDate = { 
           $gte: monthStart, // >= 2024-12-01 00:00:00
-          $lte: monthEnd    // <= 2024-12-21 23:59:59
+          $lte: delayCalculationDate    // <= min(monthEnd, today)
         };
-        
-        // ✅ Qo'shimcha: Faqat kechikkan yoki bugungi to'lovlar (kelajak to'lovlarni chiqarib tashlash)
-        matchCondition.nextPaymentDate.$lte = new Date(Math.min(monthEnd.getTime(), today.getTime()));
         
         logger.debug("🔍 Final date filter:", {
           gte: matchCondition.nextPaymentDate.$gte.toISOString(),
@@ -180,14 +184,14 @@ class CustomerService {
             remainingDebt: { $gt: 0 },
           },
         },
-        // Kechikish kunlarini hisoblash (MongoDB 4.x uchun ham ishlaydi)
+        // ✅ Har bir shartnoma uchun kechikish kunlarini hisoblash
         {
           $addFields: {
             delayDays: {
               $floor: {
                 $divide: [
                   { $subtract: [new Date(), "$nextPaymentDate"] },
-                  1000 * 60 * 60 * 24, // milliseconds to days
+                  1000 * 60 * 60 * 24,
                 ],
               },
             },
@@ -199,19 +203,39 @@ class CustomerService {
             firstName: { $first: "$customer.firstName" },
             lastName: { $first: "$customer.lastName" },
             phoneNumber: { $first: "$customer.phoneNumber" },
-            delayDays: { $max: "$delayDays" },
             totalDebt: { $sum: "$remainingDebt" },
             contractsCount: { $sum: 1 },
             maxNextPaymentDate: { $max: "$nextPaymentDate" }, // ✅ Eng katta (eng yaqin) nextPaymentDate
+            minNextPaymentDate: { $min: "$nextPaymentDate" }, // ✅ Eng kichik (eng eski) nextPaymentDate
           },
         },
-        // ✅ YANGI SORTING: Agar filterDate berilgan bo'lsa, nextPaymentDate bo'yicha KAMAYIB borish
-        // 21-dekabr → 20-dekabr → 19-dekabr → ... → 1-dekabr
-        // Aks holda, kechikish kunlari bo'yicha kamayib borish
+        // ✅ TUZATILDI: delayDays ni to'g'ri hisoblash
+        // - isShowAll bo'lsa: eng ESKI to'lovdan kechikish (minNextPaymentDate - eng ko'p kechikkan)
+        // - filterDate bo'lsa: filter ichidagi eng YAQIN to'lovdan kechikish (minNextPaymentDate)
+        {
+          $addFields: {
+            delayDays: {
+              $floor: {
+                $divide: [
+                  { 
+                    $subtract: [
+                      delayCalculationDate, // ✅ Pipeline dan oldin hisoblangan sana
+                      "$minNextPaymentDate" // ✅ Har doim minNextPaymentDate ishlatamiz
+                    ] 
+                  },
+                  1000 * 60 * 60 * 24,
+                ],
+              },
+            },
+          },
+        },
+        // ✅ TUZATILDI: Sorting logikasi
+        // - isShowAll: eng ko'p kechikkan mijozlar birinchi (delayDays bo'yicha kamayish)
+        // - filterDate berilganda: ENG YAQIN to'lovlar birinchi (21→20→19→...→1-dekabr)
         { 
           $sort: isShowAll 
-            ? { delayDays: -1 } // Barcha qarzdorlar - kechikish bo'yicha
-            : { maxNextPaymentDate: -1 } // Filterlangan - sana bo'yicha KAMAYIB (21→20→19→...→1)
+            ? { delayDays: -1 } // Barcha qarzdorlar - eng ko'p kechikkan birinchi
+            : { minNextPaymentDate: -1 } // ✅ Eng yaqin (21-dekabr) → eng uzoq (1-dekabr)
         },
       ]);
 
