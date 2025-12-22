@@ -171,7 +171,10 @@ class DebtorService {
             isActive: true,
             isDeclare: false,
             status: ContractStatus.ACTIVE,
-            nextPaymentDate: dateFilter,
+            // ✅ TUZATISH: nextPaymentDate filtrni tanlangan sanagacha bo'lgan barcha qarzlarni qamraydigan qilish
+            nextPaymentDate: startDate && endDate
+              ? { $lte: new Date(endDate) }
+              : { $lt: today },
           },
         },
         {
@@ -283,18 +286,64 @@ class DebtorService {
         },
         {
           $addFields: {
+            // ✅ KECHIKKAN KUNLARNI HISOBLASH (DELAY DAYS)
             delayDays: {
-              $cond: [
-                { $lt: ["$effectivePaymentDate", today] },
-                {
-                  $dateDiff: {
-                    startDate: "$effectivePaymentDate",
-                    endDate: today,
-                    unit: "day",
+              $let: {
+                vars: {
+                  // Agar kalendardan sana tanlangan bo'lsa (endDate), o'sha sanani ishlatamiz
+                  // Aks holda bugungi sanani ishlatamiz
+                  currentReferenceDate: {
+                    $ifNull: [
+                      { $literal: endDate ? new Date(endDate) : null },
+                      new Date()
+                    ]
                   },
+                  // Agar kalendar tanlangan bo'lsa, o'sha oyning to'lov kunini (originalPaymentDay) aniqlaymiz
+                  // Masalan: originalPaymentDay = 18, tanlangan oy = Dekabr bo'lsa -> 18.12.2025
+                  virtualDueDate: {
+                    $let: {
+                      vars: {
+                        refDate: { $ifNull: [{ $literal: endDate ? new Date(endDate) : null }, new Date()] }
+                      },
+                      in: {
+                        $dateFromParts: {
+                          year: { $year: "$$refDate" },
+                          month: { $month: "$$refDate" },
+                          day: { $ifNull: ["$originalPaymentDay", { $dayOfMonth: "$startDate" }] },
+                          timezone: "Asia/Tashkent"
+                        }
+                      }
+                    }
+                  }
                 },
-                0,
-              ],
+                in: {
+                  $let: {
+                    vars: {
+                      // Agar kalendar tanlangan bo'lsa va bu oy uchun to'lov sanasi o'tib ketgan bo'lsa -> virtualDueDate'dan hisobla
+                      // Aks holda haqiqiy eng birinchi kechikkan kundan (effectivePaymentDate) hisobla
+                      calculationStartDate: {
+                        $cond: [
+                          { $and: [{ $literal: !!endDate }, { $gt: ["$$currentReferenceDate", "$$virtualDueDate"] }] },
+                          "$$virtualDueDate",
+                          "$effectivePaymentDate"
+                        ]
+                      }
+                    },
+                    in: {
+                      $max: [
+                        0,
+                        {
+                          $dateDiff: {
+                            startDate: "$$calculationStartDate",
+                            endDate: "$$currentReferenceDate",
+                            unit: "day",
+                          },
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
             },
           },
         },
@@ -367,7 +416,7 @@ class DebtorService {
           const today = new Date();
           const overdueDays = Math.floor(
             (today.getTime() - contract.nextPaymentDate.getTime()) /
-              (1000 * 60 * 60 * 24)
+            (1000 * 60 * 60 * 24)
           );
 
           await Debtor.create({
@@ -422,14 +471,13 @@ class DebtorService {
         if (!existingDebtor) {
           const overdueDays = Math.floor(
             (today.getTime() - contract.nextPaymentDate.getTime()) /
-              (1000 * 60 * 60 * 24)
+            (1000 * 60 * 60 * 24)
           );
 
           logger.debug(`📊 Contract ${contract._id}:`);
           logger.debug(`   Today: ${today.toISOString().split("T")[0]}`);
           logger.debug(
-            `   Next Payment: ${
-              contract.nextPaymentDate.toISOString().split("T")[0]
+            `   Next Payment: ${contract.nextPaymentDate.toISOString().split("T")[0]
             }`
           );
           logger.debug(`   Overdue Days: ${overdueDays}`);
