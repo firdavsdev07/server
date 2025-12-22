@@ -131,11 +131,17 @@ class DebtorService {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      // ✅ Foydalanuvchi tanlagan sana (kalendardan)
+      // ✅ Agar endDate berilgan bo'lsa, bu "Kalendar rejimi"
       const filterDate = endDate ? new Date(endDate) : today;
       filterDate.setHours(23, 59, 59, 999);
 
-      const isFiltered = !!(startDate && endDate);
+      // ✅ Muhim: Agar endDate berilgan bo'lsa, filtr yoqilgan hisoblanadi
+      const isFiltered = !!endDate;
+
+      logger.debug("📅 Debtor Filter Debug:", {
+        filterDate: filterDate.toISOString(),
+        isFiltered
+      });
 
       return await Contract.aggregate([
         {
@@ -144,6 +150,7 @@ class DebtorService {
             isActive: true,
             isDeclare: false,
             status: ContractStatus.ACTIVE,
+            // Filtr sanasidan oldingi barcha qarzdorlarni qamrash
             nextPaymentDate: { $lte: filterDate }
           },
         },
@@ -164,12 +171,7 @@ class DebtorService {
             as: "manager",
           },
         },
-        {
-          $unwind: {
-            path: "$manager",
-            preserveNullAndEmptyArrays: true,
-          },
-        },
+        { $unwind: { path: "$manager", preserveNullAndEmptyArrays: true } },
         {
           $lookup: {
             from: "payments",
@@ -180,7 +182,7 @@ class DebtorService {
         },
         {
           $addFields: {
-            // ✅ Tanlangan oydagi kutilayotgan to'lov sanasi (Virtual Due Date)
+            // ✅ Tanlangan oydagi "Virtual Reja Sanasi" (masalan: 18.12.2025)
             virtualDueDate: {
               $dateFromParts: {
                 year: { $year: filterDate },
@@ -188,12 +190,27 @@ class DebtorService {
                 day: { $ifNull: ["$originalPaymentDay", { $dayOfMonth: "$startDate" }] },
                 timezone: "Asia/Tashkent"
               }
+            },
+            // ✅ Shartnoma boshlanganidan beri o'tgan oylar soni (targetMonth ni aniqlash uchun)
+            targetMonthIndex: {
+              $let: {
+                vars: {
+                  diff: {
+                    $dateDiff: {
+                      startDate: "$startDate",
+                      endDate: filterDate,
+                      unit: "month"
+                    }
+                  }
+                },
+                in: "$$diff"
+              }
             }
           }
         },
         {
           $addFields: {
-            // ✅ Shu aniq bir oy uchun to'lov qilinganmi?
+            // ✅ Aynan shu targetMonth (nechanchi oy bo'lsa) to'langanmi?
             isPaidForTargetMonth: {
               $anyElementTrue: {
                 $map: {
@@ -202,8 +219,7 @@ class DebtorService {
                   in: {
                     $and: [
                       { $eq: ["$$p.isPaid", true] },
-                      { $eq: [{ $year: "$$p.date" }, { $year: filterDate }] },
-                      { $eq: [{ $month: "$$p.date" }, { $month: filterDate }] }
+                      { $eq: ["$$p.targetMonth", "$targetMonthIndex"] }
                     ]
                   }
                 }
@@ -211,20 +227,18 @@ class DebtorService {
             }
           }
         },
-        // ✅ ASOSIY FILTR: Agar filtr bo'lsa, faqat shu oy uchun qarzdorlikni ko'rsat
+        // ✅ FILTRLASH: Kalendar rejimida faqat to'lov kuni kelgan va to'lanmaganlarni qoldirish
         {
           $match: {
             $expr: {
               $cond: [
                 { $literal: isFiltered },
-                // Filtr bo'lsa: virtualDueDate <= filterDate VA to'lov qilinmagan
                 {
                   $and: [
                     { $lte: ["$virtualDueDate", filterDate] },
                     { $eq: ["$isPaidForTargetMonth", false] }
                   ]
                 },
-                // Filtr bo'lmasa: nextPaymentDate o'tgan
                 { $lte: ["$nextPaymentDate", filterDate] }
               ]
             }
@@ -232,7 +246,7 @@ class DebtorService {
         },
         {
           $addFields: {
-            // ✅ Kechikkan kunlarni hisoblash
+            // ✅ Kechikkan kunlarni hisoblash (Aynan tanlangan kunga nisbatan)
             delayDays: {
               $cond: [
                 { $literal: isFiltered },
@@ -285,9 +299,7 @@ class DebtorService {
           }
         },
         {
-          $match: {
-            remainingDebt: { $gt: 0 }
-          }
+          $match: { remainingDebt: { $gt: 0 } }
         },
         {
           $project: {
