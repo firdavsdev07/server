@@ -143,30 +143,13 @@ class DebtorService {
   async getContract(startDate: string, endDate: string) {
     try {
       const today = new Date();
-      today.setHours(0, 0, 0, 0); // Bugungi kunning boshi
+      today.setHours(0, 0, 0, 0);
 
-      // ✅ YANGI: Hisob-kitob uchun asosiy sana (tanlangan sana yoki bugun)
-      const referenceDate = endDate ? new Date(endDate) : today;
-      referenceDate.setHours(23, 59, 59, 999); // Kun oxirigacha hisoblash
+      // ✅ Foydalanuvchi tanlagan sana (kalendardan)
+      const filterDate = endDate ? new Date(endDate) : today;
+      filterDate.setHours(23, 59, 59, 999);
 
-      let dateFilter: any = {};
-
-      if (startDate && endDate) {
-        // Sana oralig'i berilgan - o'sha oralig'dagi muddati o'tgan shartnomalar
-        dateFilter = {
-          $gte: new Date(startDate),
-          $lte: new Date(endDate),
-        };
-      } else {
-        // Sana berilmagan - bugungi kundan oldingi barcha shartnomalar (muddati o'tgan)
-        dateFilter = { $lt: today };
-      }
-
-      logger.debug("📅 Qarzdorliklar filter:", {
-        today: today.toISOString().split("T")[0],
-        referenceDate: referenceDate.toISOString().split("T")[0],
-        dateFilter,
-      });
+      const isFiltered = !!(startDate && endDate);
 
       return await Contract.aggregate([
         {
@@ -175,10 +158,8 @@ class DebtorService {
             isActive: true,
             isDeclare: false,
             status: ContractStatus.ACTIVE,
-            // ✅ TUZATISH: nextPaymentDate filtrni tanlangan sanagacha bo'lgan barcha qarzlarni qamraydigan qilish
-            nextPaymentDate: startDate && endDate
-              ? { $lte: new Date(endDate) }
-              : { $lt: today },
+            // Agarda filtr bo'lsa, nextPaymentDate filtrDate dan kichik bo'lgan hammani olamiz
+            nextPaymentDate: { $lte: filterDate }
           },
         },
         {
@@ -214,6 +195,84 @@ class DebtorService {
         },
         {
           $addFields: {
+            // ✅ Tanlangan oydagi "Kutilayotgan to'lov sanasi" (Virtual Due Date)
+            virtualDueDate: {
+              $dateFromParts: {
+                year: { $year: filterDate },
+                month: { $month: filterDate },
+                day: { $ifNull: ["$originalPaymentDay", { $dayOfMonth: "$startDate" }] },
+                timezone: "Asia/Tashkent"
+              }
+            }
+          }
+        },
+        {
+          $addFields: {
+            // ✅ Shu aniq bir oy uchun to'lov qilinganmi?
+            isPaidForTargetMonth: {
+              $anyElementTrue: {
+                $map: {
+                  input: "$paymentDetails",
+                  as: "p",
+                  in: {
+                    $and: [
+                      { $eq: ["$$p.isPaid", true] },
+                      { $eq: [{ $year: "$$p.date" }, { $year: filterDate }] },
+                      { $eq: [{ $month: "$$p.date" }, { $month: filterDate }] }
+                    ]
+                  }
+                }
+              }
+            },
+            // ✅ Eng birinchi muddati o'tgan to'lov (standart holat uchun)
+            firstOverduePaymentDate: {
+              $let: {
+                vars: {
+                  overduePayments: {
+                    $filter: {
+                      input: "$paymentDetails",
+                      as: "p",
+                      cond: {
+                        $and: [
+                          { $eq: ["$$p.isPaid", false] },
+                          { $lt: ["$$p.date", today] },
+                        ],
+                      },
+                    },
+                  },
+                },
+                in: { $min: "$$overduePayments.date" }
+              }
+            }
+          }
+        },
+        {
+          $addFields: {
+            // ✅ Qaysi sanadan boshlab kechikishni hisoblaymiz?
+            effectiveStartDate: {
+              $cond: [
+                { $and: [{ $literal: isFiltered }, { $lt: ["$virtualDueDate", filterDate] }] },
+                "$virtualDueDate", // Filtr bo'lsa -> Oylik rejadan (masalan 18-dekabr)
+                { $ifNull: ["$firstOverduePaymentDate", "$nextPaymentDate"] } // Filtr bo'lmasa -> Haqiqiy eng birinchi qarzdorlikdan
+              ]
+            }
+          }
+        },
+        {
+          $addFields: {
+            // ✅ Yakuniy kechikkan kunlar
+            delayDays: {
+              $max: [
+                0,
+                {
+                  $dateDiff: {
+                    startDate: "$effectiveStartDate",
+                    endDate: filterDate,
+                    unit: "day",
+                  },
+                }
+              ]
+            },
             totalPaid: {
               $sum: {
                 $map: {
@@ -229,131 +288,26 @@ class DebtorService {
                 },
               },
             },
-          },
+          }
         },
         {
           $addFields: {
-            remainingDebt: {
-              $subtract: ["$totalPrice", "$totalPaid"],
-            },
-          },
+            remainingDebt: { $subtract: ["$totalPrice", "$totalPaid"] }
+          }
         },
-        // MUHIM: Faqat qarzdori bor shartnomalarni filtrlash
         {
           $match: {
-            remainingDebt: { $gt: 0 },
-          },
-        },
-        {
-          $addFields: {
-            // ✅ TUZATISH: To'lanmagan eng birinchi oyni topish uchun payment'larni tekshirish
-            // ❌ESKI MUAMMO: Bu birinchi to'lanmagan to'lovni topadi, lekin bugungi sanaga nisbatan kechikishni hisoblaydi
-            // ✅ YANGI YECHIM: Faqat kechikkan (muddati o'tgan) to'lanmagan to'lovlarni topish
-            firstOverduePaymentDate: {
-              $let: {
-                vars: {
-                  // Faqat to'lanmagan VA muddati o'tgan to'lovlar
-                  overduePayments: {
-                    $filter: {
-                      input: "$paymentDetails",
-                      as: "p",
-                      cond: {
-                        $and: [
-                          { $eq: ["$$p.isPaid", false] },
-                          { $lt: ["$$p.date", referenceDate] }, // ✅ Faqat tanlangan sanagacha muddati o'tgan
-                        ],
-                      },
-                    },
-                  },
-                },
-                in: {
-                  $min: {
-                    $map: {
-                      input: "$$overduePayments",
-                      as: "up",
-                      in: "$$up.date",
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-        {
-          $addFields: {
-            // ✅ YANGI: Faqat kechikkan to'lovlar bo'lsa, eng birinchisidan hisoblash
-            // Aks holda nextPaymentDate dan hisoblash (eski logika)
-            effectivePaymentDate: {
-              $ifNull: ["$firstOverduePaymentDate", "$nextPaymentDate"],
-            },
-          },
-        },
-        {
-          $addFields: {
-            // ✅ KECHIKKAN KUNLARNI HISOBLASH (DELAY DAYS)
-            delayDays: {
-              $let: {
-                vars: {
-                  // Hisob-kitob qilinadigan sana (tanlangan endDate yoki bugun)
-                  refDate: referenceDate,
-                  // ✅ Virtual to'lov kunini hisoblash (tanlangan oydagi 18-sana)
-                  virtualDueDate: {
-                    $dateFromParts: {
-                      year: { $year: referenceDate },
-                      month: { $month: referenceDate },
-                      day: { $ifNull: ["$originalPaymentDay", { $dayOfMonth: "$startDate" }] },
-                      timezone: "Asia/Tashkent"
-                    }
-                  }
-                },
-                in: {
-                  $let: {
-                    vars: {
-                      // Agar kalendar tanlangan bo'lsa, kechikishni tanlangan oydagi to'lov kunidan boshlaymiz
-                      // Agar u sanadan o'tmagan bo'lsak, u holda kechikish 0 bo'ladi.
-                      // Aks holda (kalendar yo'q bo'lsa) haqiqiy eng birinchi kechikkan oydan hisoblaymiz.
-                      calcStartDate: {
-                        $cond: [
-                          { $and: [{ $literal: !!endDate }, { $gt: [referenceDate, "$$virtualDueDate"] }] },
-                          "$$virtualDueDate",
-                          "$effectivePaymentDate"
-                        ]
-                      }
-                    },
-                    in: {
-                      $max: [
-                        0,
-                        {
-                          $dateDiff: {
-                            startDate: "$$calcStartDate",
-                            endDate: "$$refDate",
-                            unit: "day",
-                          },
-                        }
-                      ]
-                    }
-                  }
-                }
-              }
-            },
-          },
+            remainingDebt: { $gt: 0 }
+          }
         },
         {
           $project: {
-            _id: 1, // Shartnoma ID'sini saqlab qolish
-            contractId: "$_id", // Shartnoma ID'si
-            customerId: "$customer._id", // Mijoz ID'si
-            fullName: {
-              $concat: ["$customer.firstName", " ", "$customer.lastName"],
-            },
+            _id: 1,
+            contractId: "$_id",
+            customerId: "$customer._id",
+            fullName: { $concat: ["$customer.firstName", " ", "$customer.lastName"] },
             phoneNumber: "$customer.phoneNumber",
-            manager: {
-              $concat: [
-                { $ifNull: ["$manager.firstName", ""] },
-                " ",
-                { $ifNull: ["$manager.lastName", ""] },
-              ],
-            },
+            manager: { $concat: [{ $ifNull: ["$manager.firstName", ""] }, " ", { $ifNull: ["$manager.lastName", ""] }] },
             totalPrice: 1,
             totalPaid: 1,
             remainingDebt: 1,
@@ -361,16 +315,14 @@ class DebtorService {
             productName: 1,
             startDate: 1,
             delayDays: 1,
-            initialPayment: 1,
+            initialPayment: 1
           },
         },
-        { $sort: { nextPaymentDate: 1 } }, // To'g'ri field nomi
+        { $sort: { delayDays: -1 } }
       ]);
     } catch (error) {
       logger.error("Error fetching contracts by payment date:", error);
-      throw BaseError.InternalServerError(
-        "Shartnomalarni olishda xatolik yuz berdi"
-      );
+      throw BaseError.InternalServerError("Shartnomalarni olishda xatolik yuz berdi");
     }
   }
 
