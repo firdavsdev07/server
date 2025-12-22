@@ -56,38 +56,37 @@ class CustomerService {
       logger.debug("👤 Manager ID:", user.sub);
       logger.debug("📅 Original filterDate param:", filterDate || "not provided");
 
-      // ✅ YANGI LOGIKA: Agar filterDate berilmagan bo'lsa, barcha qarzdorlarni qaytarish
-      const isShowAll = !filterDate;
-
-      // ✅ Bugungi sana (kechikkan to'lovlar uchun)
+      // ✅ Bugungi sana
       const today = new Date();
       today.setHours(23, 59, 59, 999);
 
-      // ✅ delayDays hisoblash uchun sana
-      let delayCalculationDate = today;
+      // ✅ Filter uchun sanalar
+      // filterStartDate - default: juda eski sana (barcha to'lovlar o'tadi)
+      let filterStartDate: Date = new Date('1970-01-01T00:00:00.000Z');
       let filterEndDate = today;
+      const isShowAll = !filterDate;
 
-      if (!isShowAll && filterDate) {
-        // ✅ TUZATILDI: Tanlangan sanagacha BARCHA kechikkan to'lovlar
-        // Masalan 23-dekabr tanlansa: 18-okt, 18-noy, 18-dek - barchasi ko'rsatiladi
+      if (filterDate) {
+        // Tanlangan sana (masalan, 2024-12-23)
         const selectedDate = new Date(filterDate + 'T23:59:59.999Z');
 
-        // Filter end date: tanlangan sana yoki bugun (qaysi kichik bo'lsa)
-        filterEndDate = new Date(Math.min(selectedDate.getTime(), today.getTime()));
-        delayCalculationDate = filterEndDate;
+        // Oy boshi (masalan, 2024-12-01 00:00:00)
+        filterStartDate = new Date(selectedDate);
+        filterStartDate.setUTCDate(1);
+        filterStartDate.setUTCHours(0, 0, 0, 0);
 
-        logger.debug("📅 Filter: ALL overdue payments up to selected date:", {
+        // Filter end: tanlangan sana yoki bugun (qaysi kichik)
+        filterEndDate = new Date(Math.min(selectedDate.getTime(), today.getTime()));
+
+        logger.debug("📅 Filter: MONTH RANGE:", {
+          filterStartDate: filterStartDate.toISOString(),
           filterEndDate: filterEndDate.toISOString(),
-          today: today.toISOString(),
-          delayCalculationDate: delayCalculationDate.toISOString(),
-          originalDate: filterDate,
-          filterType: "all_overdue_up_to_date"
         });
+      } else {
+        logger.debug("� Filter: ALL overdue (calendar cleared)");
       }
 
-      logger.debug("🔍 Will filter payments with date <= " + filterEndDate.toISOString());
-
-      // Debug: Barcha shartnomalarni sanash
+      // Debug
       const totalContracts = await Contract.countDocuments({
         isActive: true,
         isDeleted: false,
@@ -95,10 +94,9 @@ class CustomerService {
       });
       logger.debug("📊 Total active contracts:", totalContracts);
 
-      // ✅ TUZATILDI: Individual PAYMENTS orqali filter
-      // Contract.nextPaymentDate emas, payment.date <= filterEndDate va isPaid = false
+      // ✅ YANGI MANTIQ: Payment.date bo'yicha filter
       const result = await Contract.aggregate([
-        // 1. Barcha aktiv shartnomalarni olish (hali filter yo'q)
+        // 1. Barcha aktiv shartnomalar
         {
           $match: {
             isActive: true,
@@ -132,23 +130,10 @@ class CustomerService {
             as: "paymentDetails",
           },
         },
-        // 4. ✅ YANGI: Kechikkan to'lovlarni filterlash (tanlangan sanagacha)
+        // 4. To'lovlarni hisoblash
         {
           $addFields: {
-            // Tanlangan sanagacha bo'lgan TO'LANMAGAN to'lovlar
-            overduePayments: {
-              $filter: {
-                input: "$paymentDetails",
-                as: "p",
-                cond: {
-                  $and: [
-                    { $eq: ["$$p.isPaid", false] },           // To'lanmagan
-                    { $lte: ["$$p.date", filterEndDate] }     // Tanlangan sanagacha
-                  ]
-                }
-              }
-            },
-            // To'langan summani hisoblash
+            // To'langan summa
             totalPaid: {
               $sum: {
                 $map: {
@@ -164,35 +149,54 @@ class CustomerService {
                 },
               },
             },
+            // ✅ YANGI: Filter bo'yicha kechikkan to'lovlar
+            // - isShowAll: barcha to'lanmagan (date <= today)
+            // - filterDate: faqat shu oy ichidagi (filterStartDate <= date <= filterEndDate)
+            filteredOverduePayments: {
+              $filter: {
+                input: "$paymentDetails",
+                as: "p",
+                cond: isShowAll
+                  ? {
+                    // BARCHA kechikkan to'lovlar (bugungi kungacha)
+                    $and: [
+                      { $eq: ["$$p.isPaid", false] },
+                      { $lte: ["$$p.date", today] }
+                    ]
+                  }
+                  : {
+                    // Faqat tanlangan oy ichidagi (1-dan tanlangan kungacha)
+                    $and: [
+                      { $eq: ["$$p.isPaid", false] },
+                      { $gte: ["$$p.date", filterStartDate] },
+                      { $lte: ["$$p.date", filterEndDate] }
+                    ]
+                  }
+              }
+            },
           },
         },
-        // 5. ✅ YANGI: Faqat kechikkan to'lovlari bor shartnomalar
+        // 5. ✅ Faqat filterlangan kechikkan to'lovlari bor shartnomalar
         {
           $match: {
-            "overduePayments.0": { $exists: true }  // Kamida 1 ta kechikkan to'lov
+            "filteredOverduePayments.0": { $exists: true }
           }
         },
-        // 6. Qolgan qarz va eng eski kechikkan sanani hisoblash
+        // 6. Qo'shimcha ma'lumotlar
         {
           $addFields: {
             remainingDebt: {
               $subtract: ["$totalPrice", "$totalPaid"],
             },
-            // Eng eski to'lanmagan to'lov sanasi (delayDays uchun)
-            oldestOverdueDate: {
-              $min: "$overduePayments.date"
+            // Filterlangan to'lovlardan eng eskisi
+            oldestFilteredPaymentDate: {
+              $min: "$filteredOverduePayments.date"
             },
-            // Kechikkan to'lovlar soni
-            overduePaymentsCount: {
-              $size: "$overduePayments"
-            },
-            // Kechikkan to'lovlar summasi
-            overdueAmount: {
-              $sum: "$overduePayments.amount"
-            }
+            filteredOverdueCount: { $size: "$filteredOverduePayments" },
+            filteredOverdueAmount: { $sum: "$filteredOverduePayments.amount" },
           },
         },
-        // 7. Faqat qarzi bor shartnomalar
+        // 7. Faqat qarzi bor
         {
           $match: {
             remainingDebt: { $gt: 0 },
@@ -204,7 +208,7 @@ class CustomerService {
             delayDays: {
               $floor: {
                 $divide: [
-                  { $subtract: [delayCalculationDate, "$oldestOverdueDate"] },
+                  { $subtract: [filterEndDate, "$oldestFilteredPaymentDate"] },
                   1000 * 60 * 60 * 24,
                 ],
               },
@@ -220,28 +224,24 @@ class CustomerService {
             phoneNumber: { $first: "$customer.phoneNumber" },
             totalDebt: { $sum: "$remainingDebt" },
             contractsCount: { $sum: 1 },
-            // Eng eski kechikkan sana (barcha shartnomalar bo'yicha)
-            oldestOverdueDate: { $min: "$oldestOverdueDate" },
-            // Jami kechikkan to'lovlar soni
-            totalOverduePayments: { $sum: "$overduePaymentsCount" },
-            // Jami kechikkan summa
-            totalOverdueAmount: { $sum: "$overdueAmount" },
+            oldestPaymentDate: { $min: "$oldestFilteredPaymentDate" },
+            totalOverduePayments: { $sum: "$filteredOverdueCount" },
           },
         },
-        // 10. Final delayDays hisoblash
+        // 10. Final delayDays
         {
           $addFields: {
             delayDays: {
               $floor: {
                 $divide: [
-                  { $subtract: [delayCalculationDate, "$oldestOverdueDate"] },
+                  { $subtract: [filterEndDate, "$oldestPaymentDate"] },
                   1000 * 60 * 60 * 24,
                 ],
               },
             },
           },
         },
-        // 11. Sorting: eng ko'p kechikkanlar birinchi
+        // 11. Eng ko'p kechikkanlar birinchi
         {
           $sort: { delayDays: -1 }
         },
