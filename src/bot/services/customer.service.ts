@@ -169,6 +169,22 @@ class CustomerService {
                 },
               },
             },
+            // ✅ YANGI: To'lanmagan to'lovlarning eng yaqin sanasini topish
+            actualNextPaymentDate: {
+              $min: {
+                $map: {
+                  input: {
+                    $filter: {
+                      input: "$paymentDetails",
+                      as: "p",
+                      cond: { $eq: ["$$p.isPaid", false] }, // ✅ Faqat to'lanmaganlar!
+                    },
+                  },
+                  as: "unpaid",
+                  in: "$$unpaid.date",
+                },
+              },
+            },
           },
         },
         {
@@ -176,6 +192,8 @@ class CustomerService {
             remainingDebt: {
               $subtract: ["$totalPrice", "$totalPaid"],
             },
+            // ✅ Contract.nextPaymentDate emas, payment'lardan hisoblangan sanani ishlatamiz
+            nextPaymentDate: { $ifNull: ["$actualNextPaymentDate", "$nextPaymentDate"] },
           },
         },
         // Faqat qarzi bor shartnomalar
