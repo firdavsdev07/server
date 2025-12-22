@@ -619,19 +619,18 @@ class PaymentService {
           contract.previousPaymentDate = undefined;
           contract.postponedAt = undefined;
         } else {
-          // Oddiy to'lov - asl to'lov kuniga qaytarish
+          // ✅ TUZATISH: Hozirgi nextPaymentDate dan keyingi oyni hisoblash (bugungi sanadan emas!)
           const originalDay =
             contract.originalPaymentDay || currentDate.getDate();
 
-          // Hozirgi oydan keyingi oyni hisoblash
-          const today = new Date();
+          // currentDate dan keyingi oyni hisoblash
           nextMonth = new Date(
-            today.getFullYear(),
-            today.getMonth() + 1,
+            currentDate.getFullYear(),
+            currentDate.getMonth() + 1,
             originalDay
           );
 
-          logger.debug("📅 Oddiy to'lov - asl to'lov kuniga o'tkazildi:", {
+          logger.debug("📅 Oddiy to'lov - keyingi oyga o'tkazildi:", {
             old: currentDate.toLocaleDateString("uz-UZ"),
             originalPaymentDay: originalDay,
             new: nextMonth.toLocaleDateString("uz-UZ"),

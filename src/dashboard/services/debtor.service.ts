@@ -238,12 +238,48 @@ class DebtorService {
         },
         {
           $addFields: {
+            // ✅ TUZATISH: To'lanmagan eng birinchi oyni topish uchun payment'larni tekshirish
+            firstUnpaidPaymentDate: {
+              $let: {
+                vars: {
+                  unpaidPayments: {
+                    $filter: {
+                      input: "$paymentDetails",
+                      as: "p",
+                      cond: { $eq: ["$$p.isPaid", false] },
+                    },
+                  },
+                },
+                in: {
+                  $min: {
+                    $map: {
+                      input: "$$unpaidPayments",
+                      as: "up",
+                      in: "$$up.date",
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        {
+          $addFields: {
+            // Agar to'lanmagan to'lovlar bo'lsa, eng birinchisidan hisoblash
+            // Aks holda nextPaymentDate dan hisoblash
+            effectivePaymentDate: {
+              $ifNull: ["$firstUnpaidPaymentDate", "$nextPaymentDate"],
+            },
+          },
+        },
+        {
+          $addFields: {
             delayDays: {
               $cond: [
-                { $lt: ["$nextPaymentDate", today] },
+                { $lt: ["$effectivePaymentDate", today] },
                 {
                   $dateDiff: {
-                    startDate: "$nextPaymentDate",
+                    startDate: "$effectivePaymentDate",
                     endDate: today,
                     unit: "day",
                   },

@@ -116,16 +116,19 @@ export class ContractHelper {
       return nextMonth;
     }
 
-    // Oddiy to'lov - keyingi oyga o'tkazish
+    // ✅ TUZATISH: Hozirgi nextPaymentDate dan keyingi oyni hisoblash (bugungi sanadan emas!)
     const originalDay = contract.originalPaymentDay || currentDate.getDate();
-    const today = new Date();
     const nextMonth = new Date(
-      today.getFullYear(),
-      today.getMonth() + 1,
+      currentDate.getFullYear(),
+      currentDate.getMonth() + 1,
       originalDay
     );
 
-    logger.debug("📅 Oddiy to'lov - keyingi oyga o'tkazildi");
+    logger.debug("📅 Oddiy to'lov - keyingi oyga o'tkazildi:", {
+      old: currentDate.toLocaleDateString("uz-UZ"),
+      new: nextMonth.toLocaleDateString("uz-UZ"),
+      originalDay: originalDay
+    });
 
     return nextMonth;
   }

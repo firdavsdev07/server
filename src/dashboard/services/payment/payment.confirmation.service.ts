@@ -140,6 +140,7 @@ export class PaymentConfirmationService extends PaymentBaseService {
         let nextMonth: Date;
 
         if (contract.previousPaymentDate && contract.postponedAt) {
+          // Kechiktirilgan to'lov to'landi - asl sanaga qaytarish
           const originalDay = contract.originalPaymentDay || new Date(contract.previousPaymentDate).getDate();
           const today = new Date();
           nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, originalDay);
@@ -149,11 +150,21 @@ export class PaymentConfirmationService extends PaymentBaseService {
           contract.previousPaymentDate = undefined;
           contract.postponedAt = undefined;
         } else {
+          // ✅ TUZATISH: Hozirgi nextPaymentDate dan keyingi oyni hisoblash (bugungi sanadan emas!)
           const originalDay = contract.originalPaymentDay || currentDate.getDate();
-          const today = new Date();
-          nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, originalDay);
           
-          logger.debug("📅 Oddiy to'lov - asl to'lov kuniga o'tkazildi");
+          // currentDate dan keyingi oyni hisoblash
+          nextMonth = new Date(
+            currentDate.getFullYear(),
+            currentDate.getMonth() + 1,
+            originalDay
+          );
+          
+          logger.debug("📅 Oddiy to'lov - keyingi oyga o'tkazildi:", {
+            old: currentDate.toLocaleDateString("uz-UZ"),
+            new: nextMonth.toLocaleDateString("uz-UZ"),
+            originalDay: originalDay
+          });
         }
 
         contract.nextPaymentDate = nextMonth;

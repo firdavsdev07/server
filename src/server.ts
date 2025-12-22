@@ -32,7 +32,6 @@ const startServer = async () => {
       }
     }, 24 * 60 * 60 * 1000); // 24 soat
 
-    // ✅ A6: PENDING to'lovlarni avtomatik rad etish (har soatda)
     setInterval(async () => {
       try {
         logger.info("🕐 Running scheduled task: Check expired PENDING payments");
