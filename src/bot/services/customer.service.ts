@@ -73,7 +73,7 @@ class CustomerService {
 
       const managerId = new Types.ObjectId(user.sub);
 
-      // ✅ Soddalashtirilgan aggregation
+      // ✅ WEB BILAN BIR XIL LOGIKA: nextPaymentDate tekshirish
       const result = await Contract.aggregate([
         // 1️⃣ Faol shartnomalarni filtrlash
         {
@@ -93,7 +93,7 @@ class CustomerService {
             as: "customerData",
           },
         },
-        { $unwind: "$customerData" },
+        { $unwind: { path: "$customerData", preserveNullAndEmptyArrays: false } },
         
         // 3️⃣ Faqat o'z menejerining mijozlari
         {
@@ -114,30 +114,20 @@ class CustomerService {
           },
         },
         
-        // 5️⃣ Kechikkan to'lovlarni topish
+        // 5️⃣ ✅ MUHIM FIX: nextPaymentDate mavjud va o'tgan bo'lsa → qarzdor
+        {
+          $match: {
+            nextPaymentDate: { 
+              $exists: true, 
+              $ne: null, 
+              $lte: filterEndDate 
+            }
+          }
+        },
+        
+        // 6️⃣ To'langan summani hisoblash
         {
           $addFields: {
-            // ✅ TUZATISH: isPaid va status ikkalasini ham tekshirish
-            // To'lanmagan yoki kam to'langan to'lovlar
-            overduePayments: {
-              $filter: {
-                input: "$paymentDetails",
-                as: "p",
-                cond: {
-                  $and: [
-                    { $lte: ["$$p.date", filterEndDate] },
-                    {
-                      $or: [
-                        { $eq: ["$$p.isPaid", false] },
-                        { $eq: ["$$p.status", "UNDERPAID"] },
-                        { $eq: ["$$p.status", "PENDING"] }
-                      ]
-                    }
-                  ]
-                }
-              }
-            },
-            // To'langan summani hisoblash
             totalPaid: {
               $sum: {
                 $map: {
@@ -156,13 +146,6 @@ class CustomerService {
           },
         },
         
-        // 6️⃣ Faqat kechikkan to'lovlari bor shartnomalar
-        {
-          $match: {
-            "overduePayments.0": { $exists: true }
-          }
-        },
-        
         // 7️⃣ Qolgan qarzni hisoblash
         {
           $addFields: {
@@ -172,8 +155,14 @@ class CustomerService {
                 "$totalPaid"
               ],
             },
-            oldestUnpaidDate: { $min: "$overduePayments.date" },
-            overdueCount: { $size: "$overduePayments" }
+            delayDays: {
+              $floor: {
+                $divide: [
+                  { $subtract: [filterEndDate, "$nextPaymentDate"] },
+                  1000 * 60 * 60 * 24,
+                ],
+              },
+            }
           }
         },
         
@@ -191,12 +180,12 @@ class CustomerService {
             phoneNumber: { $first: "$customerData.phoneNumber" },
             totalDebt: { $sum: "$remainingDebt" },
             contractsCount: { $sum: 1 },
-            oldestDate: { $min: "$oldestUnpaidDate" },
-            totalOverdueCount: { $sum: "$overdueCount" }
+            oldestDate: { $min: "$nextPaymentDate" },
+            totalOverdueCount: { $sum: 1 }
           },
         },
         
-        // 🔟 Kechikish kunini hisoblash
+        // 🔟 Kechikish kunini qayta hisoblash
         {
           $addFields: {
             delayDays: {
@@ -215,6 +204,7 @@ class CustomerService {
       ]);
 
       logger.debug(`✅ Found ${result.length} debtors`);
+      
       if (result.length > 0) {
         logger.debug(`📊 Sample debtor:`, {
           name: `${result[0].firstName} ${result[0].lastName}`,

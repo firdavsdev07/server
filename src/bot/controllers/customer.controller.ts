@@ -32,9 +32,9 @@ class CustomerController {
         return next(BaseError.ForbiddenError());
       }
 
-      // ✅ Query parametrdan filterDate ni olish
       const filterDate = req.query.date as string | undefined;
       const data = await customerService.getUnpaidDebtors(user, filterDate);
+      
       res.json(data);
     } catch (error) {
       return next(error);
