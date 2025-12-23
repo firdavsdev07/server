@@ -55,11 +55,14 @@ class CustomerService {
       logger.debug("\n🔍 === GETTING UNPAID DEBTORS ===");
 
       let filterEndDate = new Date();
-      if (filterDate) {
+      // ✅ TUZATISH: Bo'sh string va undefined ni bir xil deb qarash
+      if (filterDate && filterDate.trim() !== "") {
         const [year, month, day] = filterDate.split('-').map(Number);
         filterEndDate = new Date(year, month - 1, day, 23, 59, 59, 999);
+        logger.debug(`📅 Filter date: ${filterDate} -> ${filterEndDate.toISOString()}`);
       } else {
         filterEndDate.setHours(23, 59, 59, 999);
+        logger.debug(`📅 No filter - using today: ${filterEndDate.toISOString()}`);
       }
 
       const managerId = new Types.ObjectId(user.sub);
