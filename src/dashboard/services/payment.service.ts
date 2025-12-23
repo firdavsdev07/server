@@ -1666,6 +1666,10 @@ class PaymentService {
         totalMonths: contract.period,
       });
 
+      // Customer ma'lumotlarini olish (audit log uchun)
+      const customerData = await Customer.findById(customer);
+      const customerName = customerData?.fullName || "Unknown Customer";
+
       // To'lovlarni taqsimlash
       while (remainingAmount > 0.01 && currentMonthIndex < contract.period) {
         const monthNumber = currentMonthIndex + 1;
@@ -1780,6 +1784,44 @@ class PaymentService {
 
       // ✅ Contract completion tekshirish
       await this.checkContractCompletion(String(contract._id));
+
+      // ✅ AUDIT LOG: Qarz to'lovlari uchun
+      try {
+        const auditLogService = (await import("../../services/audit-log.service")).default;
+        const { AuditAction, AuditEntity } = await import("../../schemas/audit-log.schema");
+
+        // Har bir yaratilgan to'lov uchun audit log yozish
+        for (const payment of createdPayments) {
+          await auditLogService.createLog({
+            action: AuditAction.PAYMENT,
+            entity: AuditEntity.PAYMENT,
+            entityId: payment._id.toString(),
+            userId: user.sub,
+            metadata: {
+              paymentType: "monthly",
+              paymentStatus: payment.status,
+              amount: payment.actualAmount || payment.amount,
+              targetMonth: payment.targetMonth,
+              customerName: customerName, // ✅ Mijoz ismi
+              affectedEntities: [
+                {
+                  entityType: "contract",
+                  entityId: contract._id.toString(),
+                  entityName: contract.productName || "Shartnoma",
+                },
+                {
+                  entityType: "customer",
+                  entityId: customer.toString(),
+                  entityName: customerName,
+                }
+              ]
+            }
+          });
+        }
+        logger.debug(`✅ Audit log created for ${createdPayments.length} debtor payment(s)`);
+      } catch (auditError) {
+        logger.error("❌ Error creating audit log:", auditError);
+      }
 
       // ✅ Response'da to'lov holati haqida ma'lumot qaytarish
       const lastPayment = createdPayments[createdPayments.length - 1];
