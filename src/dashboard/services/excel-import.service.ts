@@ -81,9 +81,10 @@ class ExcelImportService {
       }
 
       // 4. JSON formatga o'tkazish
+      // ✅ TUZATISH: raw: true - Excel sanalarni serial number sifatida olish
       const data = XLSX.utils.sheet_to_json(worksheet, {
         header: 1,
-        raw: false,
+        raw: true,  // Excel serial number'larni o'zgartirmasdan olish
         dateNF: "yyyy-mm-dd",
       });
 
@@ -113,15 +114,35 @@ class ExcelImportService {
 
   /**
    * Sanani parse qilish (Excel formatidan)
+   * ✅ TUZATILDI: Excel serial number'larni to'g'ri handle qilish
    */
-  private parseDate(dateStr: string, isDay: boolean = false): Date {
+  private parseDate(dateStr: any, isDay: boolean = false): Date {
     if (!dateStr) {
       return new Date();
     }
 
+    // ✅ YANGI: Excel serial number (number) ni Date'ga aylantirish
+    // Excel sanalarni 1900-01-01 dan boshlab kunlar soni sifatida saqlaydi
+    // Misol: 45078 = 2023-05-18
+    if (typeof dateStr === 'number') {
+      // Excel serial number to Date
+      // 1900-01-01 = 1, lekin Excel'da 1900 leap year xatosi bor
+      // Shuning uchun 60 kundan keyin 1 kun qo'shamiz
+      const excelEpoch = new Date(1899, 11, 30); // 1899-12-30
+      const days = dateStr > 60 ? dateStr : dateStr - 1;
+      const milliseconds = days * 24 * 60 * 60 * 1000;
+      const date = new Date(excelEpoch.getTime() + milliseconds);
+      
+      logger.debug(`  📅 Excel serial ${dateStr} → ${dayjs(date).format('YYYY-MM-DD')}`);
+      return date;
+    }
+
+    // String formatga aylantirish
+    const dateString = String(dateStr);
+
     // Agar faqat kun raqami bo'lsa (1-31)
-    if (isDay && /^\d{1,2}$/.test(dateStr)) {
-      const day = parseInt(dateStr);
+    if (isDay && /^\d{1,2}$/.test(dateString)) {
+      const day = parseInt(dateString);
       if (day >= 1 && day <= 31) {
         // Hozirgi oy va yildan foydalanish
         const now = new Date();
@@ -130,41 +151,41 @@ class ExcelImportService {
     }
 
     // "5/7/25" yoki "7/7/25" formatini to'g'ri parse qilish
-    const shortDateMatch = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
+    const shortDateMatch = dateString.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
     if (shortDateMatch) {
       let first = parseInt(shortDateMatch[1]);
       let second = parseInt(shortDateMatch[2]);
       let year = parseInt(shortDateMatch[3]);
 
       // 2-xonali yilni to'g'ri yilga aylantirish
-      // Barcha sanalar 2020+ bo'lishi kerak
-      year += 2000; // 25 → 2025, 75 → 2075
+      year += 2000; // 25 → 2025
 
-      // Agar year 2050+ bo'lsa, bu xato - 75 → 2025 bo'lishi kerak
+      // Agar year 2050+ bo'lsa, bu xato
       if (year > 2050) {
         year = 2025; // Default: 2025
-        logger.warn(`⚠️ Suspicious year in "${dateStr}", using 2025`);
+        logger.warn(`⚠️ Suspicious year in "${dateString}", using 2025`);
       }
 
       // Oy va kunni aniqlash
       let month: number, day: number;
       if (first > 12) {
-        // kun/oy format: 15/7/25
+        // kun/oy format: 18/5/25 → day=18, month=5
         day = first;
         month = second;
       } else if (second > 12) {
-        // oy/kun format: 7/15/25
+        // oy/kun format: 5/18/25 → month=5, day=18
         month = first;
         day = second;
       } else {
-        // Ikkalasi ham 12 dan kichik - oy/kun
-        month = first;
-        day = second;
+        // Ikkalasi ham 12 dan kichik - kun/oy format deb hisoblaymiz
+        // Sabab: DD/MM/YY format ko'proq ishlatiladi
+        day = first;
+        month = second;
       }
 
       // Validatsiya
       if (month < 1 || month > 12 || day < 1 || day > 31) {
-        logger.warn(`⚠️ Invalid date "${dateStr}", using current date`);
+        logger.warn(`⚠️ Invalid date "${dateString}", using current date`);
         return new Date();
       }
 
@@ -172,11 +193,11 @@ class ExcelImportService {
     }
 
     // Boshqa formatlar: "2025-05-07" yoki "5/7/2025"
-    let parsed = dayjs(dateStr, ["M/D/YYYY", "YYYY-MM-DD", "DD/MM/YYYY"], true);
+    let parsed = dayjs(dateString, ["M/D/YYYY", "YYYY-MM-DD", "DD/MM/YYYY", "D/M/YYYY"], true);
 
     if (!parsed.isValid()) {
       // Agar parse bo'lmasa, hozirgi sanani qaytarish
-      logger.warn(`Invalid date: ${dateStr}, using current date`);
+      logger.warn(`Invalid date: ${dateString}, using current date`);
       return new Date();
     }
 
