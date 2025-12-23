@@ -4,7 +4,6 @@ import IJwtUser from "../../types/user";
 import logger from "../../utils/logger";
 
 import { Debtor } from "../../schemas/debtor.schema";
-import Reminder from "../../schemas/reminder.schema";
 import BaseError from "../../utils/base.error";
 import { Types } from "mongoose";
 
@@ -546,8 +545,6 @@ class CustomerService {
           postponedAt: 1,
           isPostponedOnce: 1,
           originalPaymentDay: 1,
-          reminderDate: 1, // ✅ YANGI: Eslatma sanasi
-          reminders: 1, // ✅ YANGI: Reminder array
           durationMonths: "$period", // ✅ period -> durationMonths
           payments: {
             $map: {
@@ -565,7 +562,6 @@ class CustomerService {
                 excessAmount: "$$payment.excessAmount",
                 expectedAmount: "$$payment.expectedAmount",
                 targetMonth: "$$payment.targetMonth",
-                reminderDate: "$$payment.reminderDate", // ✅ YANGI: Payment uchun reminder
               },
             },
           },
@@ -719,7 +715,6 @@ class CustomerService {
           nextPaymentDate: "$contract.nextPaymentDate",
           previousPaymentDate: "$contract.previousPaymentDate",
           postponedAt: "$contract.postponedAt",
-          reminderDate: "$contract.reminderDate", // ✅ YANGI: Eslatma sanasi
           debtorId: "$debtorId", // ✅ TUZATISH: $addFields'dan olingan debtorId
           isPaid: 1,
           paidMonthsCount: {
@@ -754,7 +749,6 @@ class CustomerService {
                 excessAmount: "$$payment.excessAmount",
                 expectedAmount: "$$payment.expectedAmount",
                 targetMonth: "$$payment.targetMonth",
-                reminderDate: "$$payment.reminderDate", // ✅ YANGI: Payment uchun reminder
               },
             },
           },

@@ -57,7 +57,6 @@ export interface IContract extends IBase {
   postponedAt?: Date; // Qachon kechiktirilgan
   originalPaymentDay?: number; // Asl to'lov kuni (1-31) - shartnoma boshlanganidagi kun
   isPostponedOnce?: boolean; // Faqat bitta oy kechiktirilganmi?
-  reminderDate?: Date; // ✅ YANGI: Eslatma sanasi (faqat notification uchun)
   customer: ICustomer;
   productName: string;
   originalPrice: number;
@@ -140,7 +139,6 @@ const ContractSchema = new Schema<IContract>(
     postponedAt: { type: Date, required: false }, // Qachon kechiktirilgan
     originalPaymentDay: { type: Number, required: false }, // Asl to'lov kuni (1-31)
     isPostponedOnce: { type: Boolean, default: false }, // Faqat bitta oy kechiktirilganmi?
-    reminderDate: { type: Date, required: false }, // ✅ YANGI: Eslatma sanasi
     status: {
       type: String,
       enum: Object.values(ContractStatus),

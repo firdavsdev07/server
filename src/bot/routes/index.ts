@@ -8,7 +8,6 @@ import notesRoute from "./notes.routes";
 import expensesRoute from "./expenses.routes";
 import contractRoute from "./contract.routes";
 import notificationRoute from "./notification.routes";
-import reminderRoute from "./reminder.routes";
 import { botManager } from "../../middlewares/botManager.middleware";
 
 const routes = Router();
@@ -49,11 +48,6 @@ routes.use(
   "/notifications",
   botManager,
   notificationRoute
-);
-routes.use(
-  "/reminder",
-  botManager,
-  reminderRoute
 );
 
 export default routes;

@@ -54,49 +54,6 @@ class PaymentController {
     }
   }
 
-  /**
-   * To'lovni keyinga qoldirish
-   * Mijoz to'lovni boshqa sanaga ko'chirish uchun
-   */
-  async postponePayment(req: Request, res: Response, next: NextFunction) {
-    try {
-      const user = req.user;
-      const { contractId, postponeDate, reason, targetMonth } = req.body;
-
-      logger.debug("📅 POSTPONE PAYMENT REQUEST:");
-      logger.debug("   - Contract ID:", contractId);
-      logger.debug("   - Postpone Date:", postponeDate);
-      logger.debug("   - Reason:", reason);
-      logger.debug("   - Target Month:", targetMonth);
-      logger.debug("   - Manager:", user.name);
-
-      // Validation
-      if (!contractId) {
-        return next(BaseError.BadRequest("Shartnoma ID si kiritilmagan"));
-      }
-
-      if (!postponeDate) {
-        return next(BaseError.BadRequest("Eslatma vaqti kiritilmagan"));
-      }
-
-      if (!targetMonth) {
-        return next(BaseError.BadRequest("Target month kiritilmagan"));
-      }
-
-      const data = await paymentService.postponePayment(
-        contractId,
-        postponeDate,
-        reason || "Mijoz so'rovi",
-        user,
-        targetMonth
-      );
-
-      res.status(200).json(data);
-    } catch (error) {
-      logger.error("❌ Postpone payment error:", error);
-      return next(error);
-    }
-  }
 
   async payAllRemainingMonths(req: Request, res: Response, next: NextFunction) {
     return dashboardPaymentController.payAllRemainingMonths(req, res, next);

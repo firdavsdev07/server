@@ -4,7 +4,6 @@ const router = Router();
 
 router.post("/pay-debt", paymentController.payDebt);
 router.post("/pay-new-debt", paymentController.payNewDebt);
-router.post("/postpone-payment", paymentController.postponePayment);
 router.post("/pay-all-remaining", paymentController.payAllRemainingMonths);
 
 // ✅ TUZATISH: Qolgan qarzni to'lash endpoint (404 xatosini tuzatish uchun)

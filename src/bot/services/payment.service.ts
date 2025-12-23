@@ -7,7 +7,6 @@ import BaseError from "../../utils/base.error";
 import { PayDebtDto, PayNewDebtDto } from "../../validators/payment";
 import Notes from "../../schemas/notes.schema";
 import { Balance } from "../../schemas/balance.schema";
-import Reminder from "../../schemas/reminder.schema";
 import logger from "../../utils/logger";
 
 class PaymentService {
@@ -303,103 +302,6 @@ class PaymentService {
     };
   }
 
-  /**
-   * To'lov uchun eslatma vaqti belgilash
-   * Har bir oy uchun alohida eslatma
-   */
-  async postponePayment(
-    contractId: string,
-    postponeDate: string,
-    reason: string,
-    user: IJwtUser,
-    targetMonth?: number // ✅ YANGI - Qaysi oy uchun eslatma
-  ) {
-    logger.debug("\n" + "=".repeat(50));
-    logger.debug("📅 TO'LOV UCHUN ESLATMA BELGILASH");
-    logger.debug("=".repeat(50));
-
-    // Shartnomani topish
-    const contract = await Contract.findById(contractId);
-
-    if (!contract) {
-      throw BaseError.NotFoundError("Shartnoma topilmadi");
-    }
-
-    logger.debug("✅ Shartnoma topildi:", contract.productName);
-    logger.debug("📅 Target month:", targetMonth);
-
-    // Yangi eslatma vaqtini tekshirish
-    const reminderDate = new Date(postponeDate);
-    const today = new Date();
-
-    if (reminderDate < today) {
-      throw BaseError.BadRequest(
-        "Eslatma vaqti bugundan oldingi vaqt bo'lishi mumkin emas"
-      );
-    }
-
-    // ✅ Manager'ni topish
-    const manager = await Employee.findById(user.sub);
-    if (!manager) {
-      throw BaseError.NotFoundError("Manager topilmadi");
-    }
-
-    // ✅ Reminder yaratish yoki yangilash
-    let reminder = await Reminder.findOne({
-      contractId: contractId,
-      targetMonth: targetMonth,
-    });
-
-    if (reminder) {
-      // ✅ Mavjud reminder'ni yangilash
-      reminder.reminderDate = reminderDate;
-      reminder.reason = reason;
-      reminder.managerId = manager._id as any;
-      reminder.isActive = true;
-      await reminder.save();
-      logger.debug("✅ Mavjud reminder yangilandi:", reminder._id);
-    } else {
-      // ✅ Yangi reminder yaratish
-      reminder = await Reminder.create({
-        contractId: contractId,
-        customerId: contract.customer,
-        managerId: manager._id,
-        targetMonth: targetMonth,
-        reminderDate: reminderDate,
-        reason: reason,
-        isActive: true,
-      });
-      logger.debug("✅ Yangi reminder yaratildi:", reminder._id);
-    }
-
-    logger.debug("📊 Saqlangan ma'lumot:", {
-      reminderId: reminder._id,
-      targetMonth: targetMonth,
-      reminderDate: reminderDate,
-    });
-
-    // Notes yaratish
-    const additionalNotes = new Notes({
-      text: `${targetMonth}-oy uchun eslatma belgilandi. Shartnoma: ${contract.productName}. Sabab: ${reason}. Eslatma vaqti: ${reminderDate.toLocaleDateString("uz-UZ")} ${reminderDate.toLocaleTimeString("uz-UZ")}`,
-      customer: contract.customer,
-      createBy: manager,
-    });
-    await additionalNotes.save();
-
-    logger.debug("✅ Qo'shimcha Notes yaratildi");
-    logger.debug("=".repeat(50) + "\n");
-
-    return {
-      status: "success",
-      message: `${targetMonth}-oy uchun eslatma muvaffaqiyatli belgilandi`,
-      reminder: {
-        _id: reminder._id,
-        targetMonth: targetMonth,
-        reminderDate: reminderDate,
-        isActive: reminder.isActive,
-      },
-    };
-  }
 
   /**
    * Manager'ning PENDING to'lovlarini olish
