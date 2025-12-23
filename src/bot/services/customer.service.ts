@@ -117,15 +117,22 @@ class CustomerService {
         // 5️⃣ Kechikkan to'lovlarni topish
         {
           $addFields: {
-            // Kechikkan to'lovlar: to'lanmagan va sanasi filterEndDate dan kichik
+            // ✅ TUZATISH: isPaid va status ikkalasini ham tekshirish
+            // To'lanmagan yoki kam to'langan to'lovlar
             overduePayments: {
               $filter: {
                 input: "$paymentDetails",
                 as: "p",
                 cond: {
                   $and: [
-                    { $eq: ["$$p.isPaid", false] },
-                    { $lte: ["$$p.date", filterEndDate] }
+                    { $lte: ["$$p.date", filterEndDate] },
+                    {
+                      $or: [
+                        { $eq: ["$$p.isPaid", false] },
+                        { $eq: ["$$p.status", "UNDERPAID"] },
+                        { $eq: ["$$p.status", "PENDING"] }
+                      ]
+                    }
                   ]
                 }
               }
