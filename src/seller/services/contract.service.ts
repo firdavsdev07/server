@@ -175,11 +175,7 @@ class ContractService {
                     },
                   },
                   " ",
-                  { $arrayElemAt: ["$customer.firstName", 0] },
-                  " ",
-                  {
-                    $ifNull: [{ $arrayElemAt: ["$customer.lastName", 0] }, ""],
-                  },
+                  { $arrayElemAt: ["$customer.fullName", 0] },
                 ],
               },
               null,
@@ -256,13 +252,7 @@ class ContractService {
       },
       {
         $addFields: {
-          customerName: {
-            $concat: [
-              "$customer.firstName",
-              " ",
-              { $ifNull: ["$customer.lastName", ""] },
-            ],
-          },
+          customerName: "$customer.fullName",
           notes: { $ifNull: [{ $arrayElemAt: ["$notes.text", 0] }, null] },
         },
       },
@@ -324,15 +314,7 @@ class ContractService {
           customerName: {
             $cond: [
               { $gt: [{ $size: "$customer" }, 0] },
-              {
-                $concat: [
-                  { $arrayElemAt: ["$customer.firstName", 0] },
-                  " ",
-                  {
-                    $ifNull: [{ $arrayElemAt: ["$customer.lastName", 0] }, ""],
-                  },
-                ],
-              },
+              { $arrayElemAt: ["$customer.fullName", 0] },
               null,
             ],
           },

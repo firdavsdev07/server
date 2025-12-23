@@ -745,7 +745,7 @@ class PaymentService {
             type: "PAYMENT_APPROVED",
             paymentId: payment._id.toString(),
             customerId: customer._id.toString(),
-            customerName: `${customer.firstName} ${customer.lastName || ''}`.trim(),
+            customerName: customer.fullName,
             contractId: contract._id.toString(),
             productName: contract.productName || "Mahsulot",
             amount: payment.actualAmount || payment.amount,
@@ -860,7 +860,7 @@ class PaymentService {
             type: "PAYMENT_REJECTED",
             paymentId: payment._id.toString(),
             customerId: customer._id.toString(),
-            customerName: `${customer.firstName} ${customer.lastName || ''}`.trim(),
+            customerName: customer.fullName,
             contractId: contract._id.toString(),
             productName: contract.productName || "Mahsulot",
             amount: payment.actualAmount || payment.amount,
@@ -1209,7 +1209,7 @@ class PaymentService {
                 {
                   entityType: "customer",
                   entityId: contract.customer._id?.toString() || contract.customer.toString(),
-                  entityName: `${contract.customer.firstName || ""} ${contract.customer.lastName || ""}`.trim(),
+                  entityName: contract.customer.fullName,
                 }
               ] : []
             }
@@ -1489,7 +1489,7 @@ class PaymentService {
       }));
       auditData.contractId = contract._id.toString();
       auditData.customerId = contract.customer._id?.toString() || contract.customer.toString();
-      auditData.customerName = `${contract.customer.firstName || ""} ${contract.customer.lastName || ""}`.trim();
+      auditData.customerName = contract.customer.fullName;
       auditData.contractName = contract.productName || "Contract";
 
       logger.debug(`📝 Audit data collected: ${auditData.payments.length} payment(s)`);
@@ -2066,7 +2066,7 @@ class PaymentService {
                   {
                     entityType: "customer",
                     entityId: contract.customer._id?.toString() || contract.customer.toString(),
-                    entityName: `${contract.customer.firstName || ""} ${contract.customer.lastName || ""}`.trim(),
+                    entityName: contract.customer.fullName,
                   }
                 ]
               }

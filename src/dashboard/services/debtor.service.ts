@@ -80,8 +80,7 @@ class DebtorService {
         {
           $group: {
             _id: "$customer._id",
-            firstName: { $first: "$customer.firstName" },
-            lastName: { $first: "$customer.lastName" },
+            fullName: { $first: "$customer.fullName" },
             phoneNumber: { $first: "$customer.phoneNumber" },
             managerFirstName: { $first: "$manager.firstName" },
             managerLastName: { $first: "$manager.lastName" },
@@ -90,14 +89,13 @@ class DebtorService {
             totalPaid: { $sum: "$totalPaid" },
             remainingDebt: { $sum: "$remainingDebt" },
             nextPaymentDate: { $min: "$nextPaymentDate" },
+            createdAt: { $first: "$createdAt" },
           },
         },
         {
           $project: {
             _id: 1,
-            fullName: {
-              $concat: ["$firstName", " ", "$lastName"],
-            },
+            fullName: "$fullName",
             phoneNumber: 1,
             manager: {
               $concat: [
@@ -111,6 +109,7 @@ class DebtorService {
             remainingDebt: 1,
             nextPaymentDate: 1,
             activeContractsCount: 1,
+            createdAt: 1,
           },
         },
         { $sort: { remainingDebt: -1 } },
@@ -293,7 +292,7 @@ class DebtorService {
             _id: 1,
             contractId: "$_id",
             customerId: "$customer._id",
-            fullName: { $concat: ["$customer.firstName", " ", "$customer.lastName"] },
+            fullName: "$customer.fullName",
             phoneNumber: "$customer.phoneNumber",
             manager: { $concat: [{ $ifNull: ["$manager.firstName", ""] }, " ", { $ifNull: ["$manager.lastName", ""] }] },
             totalPrice: 1,
@@ -303,7 +302,8 @@ class DebtorService {
             productName: 1,
             startDate: 1,
             delayDays: 1,
-            initialPayment: 1
+            initialPayment: 1,
+            createdAt: 1
           },
         },
         { $sort: { delayDays: -1 } }

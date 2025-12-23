@@ -247,15 +247,12 @@ class ExcelImportService {
     customerName: string,
     managerId: Types.ObjectId
   ): Promise<Types.ObjectId> {
-    // Mijoz nomini parse qilish (birinchi so'z - ism, qolganlari - familiya)
-    const nameParts = customerName.trim().split(/\s+/);
-    const firstName = nameParts[0] || customerName;
-    const lastName = nameParts.slice(1).join(" ") || "";
+    // Mijoz nomini tozalash
+    const fullName = customerName.trim();
 
     // Mijozni topish
     let customer = await Customer.findOne({
-      firstName: { $regex: new RegExp(`^${firstName}$`, "i") },
-      lastName: { $regex: new RegExp(`^${lastName}$`, "i") },
+      fullName: { $regex: new RegExp(`^${fullName}$`, "i") },
       isDeleted: false,
     });
 
@@ -264,8 +261,7 @@ class ExcelImportService {
       const auth = await Auth.create({});
 
       customer = await Customer.create({
-        firstName,
-        lastName,
+        fullName,
         phoneNumber: "",
         address: "",
         passportSeries: "",
@@ -276,13 +272,13 @@ class ExcelImportService {
         isDeleted: false,
       });
 
-      logger.debug(`✅ Created new customer: ${firstName} ${lastName}`);
+      logger.debug(`✅ Created new customer: ${fullName}`);
 
       // 🔍 AUDIT LOG: Customer yaratish
       try {
         await auditLogService.logCustomerCreate(
           customer._id.toString(),
-          `${firstName} ${lastName}`,
+          fullName,
           managerId.toString(),
           { source: "excel_import", fileName: "excel_import" }
         );
@@ -291,7 +287,7 @@ class ExcelImportService {
         logger.error("❌ Error creating customer audit log:", auditError);
       }
     } else {
-      logger.debug(`✓ Found existing customer: ${firstName} ${lastName}`);
+      logger.debug(`✓ Found existing customer: ${fullName}`);
     }
 
     return customer._id as Types.ObjectId;

@@ -30,14 +30,13 @@ class CustomerService {
       isActive: true,
       isDeleted: false,
       manager: user.sub,
-    }).select("firstName lastName _id phoneNumber");
+    }).select("fullName _id phoneNumber");
 
     logger.debug(`✅ Found ${customers.length} customers for manager`);
 
     if (customers.length > 0) {
       logger.debug("📋 Sample customer:", {
-        firstName: customers[0].firstName,
-        lastName: customers[0].lastName,
+        fullName: customers[0].fullName,
         phoneNumber: customers[0].phoneNumber,
       });
     }
@@ -176,8 +175,7 @@ class CustomerService {
           $project: {
             _id: "$_id", // Contract ID
             customerId: "$customerData._id",
-            firstName: "$customerData.firstName",
-            lastName: "$customerData.lastName",
+            fullName: "$customerData.fullName",
             phoneNumber: "$customerData.phoneNumber",
             productName: "$productName", // ✅ Shartnoma nomi
             contractId: "$_id", // ✅ Shartnoma ID (click uchun)
@@ -197,7 +195,7 @@ class CustomerService {
       
       if (result.length > 0) {
         logger.debug(`📊 Sample debtor:`, {
-          name: `${result[0].firstName} ${result[0].lastName}`,
+          name: result[0].fullName,
           totalDebt: result[0].totalDebt,
           delayDays: result[0].delayDays,
           overdueCount: result[0].totalOverdueCount
@@ -300,8 +298,7 @@ class CustomerService {
         {
           $group: {
             _id: "$customerData._id",
-            firstName: { $first: "$customerData.firstName" },
-            lastName: { $first: "$customerData.lastName" },
+            fullName: { $first: "$customerData.fullName" },
             phoneNumber: { $first: "$customerData.phoneNumber" },
             lastPaymentDate: { $max: "$lastPaymentDate" },
             totalPaid: { $sum: "$totalPaid" },
@@ -440,8 +437,7 @@ class CustomerService {
         },
         {
           $project: {
-            firstName: 1,
-            lastName: 1,
+            fullName: 1,
             phoneNumber: 1,
             address: 1,
             totalDebt: 1,
@@ -462,8 +458,7 @@ class CustomerService {
       }
 
       logger.debug("✅ Customer details:", {
-        firstName: customerData[0].firstName,
-        lastName: customerData[0].lastName,
+        fullName: customerData[0].fullName,
         phoneNumber: customerData[0].phoneNumber,
         totalDebt: customerData[0].totalDebt,
         totalPaid: customerData[0].totalPaid,

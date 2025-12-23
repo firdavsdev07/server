@@ -37,13 +37,13 @@ class CashService {
       })
         .populate({
           path: "customerId",
-          select: "firstName lastName phoneNumber manager",
+          select: "fullName phoneNumber manager",
           populate: {
             path: "manager",
-            select: "firstName lastName",
+            select: "fullName",
           },
         })
-        .populate("managerId", "firstName lastName")
+        .populate("managerId", "fullName")
         .populate("notes", "text")
         .select(
           "_id amount actualAmount date isPaid paymentType notes customerId managerId status remainingAmount excessAmount expectedAmount confirmedAt confirmedBy targetMonth nextPaymentDate createdAt updatedAt"
@@ -65,7 +65,7 @@ class CashService {
               payments: payment._id,
             })
               .select("_id productName customer")
-              .populate("customer", "firstName lastName")
+              .populate("customer", "fullName")
               .lean();
 
             // Agar Contract.payments da topilmasa, customer ID orqali topish (PENDING to'lovlar uchun)
@@ -75,7 +75,7 @@ class CashService {
                 status: "active", // Faqat faol shartnomalar
               })
                 .select("_id productName customer")
-                .populate("customer", "firstName lastName")
+                .populate("customer", "fullName")
                 .sort({ createdAt: -1 }) // Eng yangi shartnomani olish
                 .lean();
 

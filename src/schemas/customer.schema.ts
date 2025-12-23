@@ -14,8 +14,7 @@ export interface ICustomerEdit {
 }
 
 export interface ICustomer extends IBase {
-  firstName: string;
-  lastName: string;
+  fullName: string;
   phoneNumber: string;
   address: string;
   passportSeries: string;
@@ -55,8 +54,7 @@ const CustomerEditSchema = new Schema<ICustomerEdit>(
 const CustomerSchema = new Schema<ICustomer>(
   {
     ...BaseSchema,
-    firstName: { type: String, required: true },
-    lastName: { type: String },
+    fullName: { type: String, required: true },
     phoneNumber: { type: String },
     address: { type: String },
     passportSeries: { type: String },

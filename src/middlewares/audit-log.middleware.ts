@@ -131,8 +131,8 @@ export const auditCustomerCreate = auditLogMiddleware(
       }
     },
     getEntityName: (req, res) => {
-      const { firstName, lastName } = req.body;
-      return `${firstName} ${lastName}`.trim();
+      const { fullName } = req.body;
+      return fullName;
     },
   }
 );
@@ -143,8 +143,8 @@ export const auditCustomerUpdate = auditLogMiddleware(
   {
     includeBody: true,
     getEntityName: (req, res) => {
-      const { firstName, lastName } = req.body;
-      return firstName || lastName ? `${firstName} ${lastName}`.trim() : undefined;
+      const { fullName } = req.body;
+      return fullName || undefined;
     },
   }
 );

@@ -24,7 +24,7 @@ class CustomerService {
     }
 
     const customer = await Customer.findById(id)
-      .populate("manager", "firstName lastName phoneNumber")
+      .populate("manager", "fullName phoneNumber")
       .populate({
         path: "contracts",
         match: { isDeleted: false },
@@ -95,8 +95,7 @@ class CustomerService {
     }
 
     // Mijoz ma'lumotlarini yangilash (menejerni o'zgartirmasdan)
-    customer.firstName = data.firstName;
-    customer.lastName = data.lastName;
+    customer.fullName = data.fullName;
     customer.phoneNumber = data.phoneNumber;
     customer.address = data.address;
     customer.passportSeries = data.passportSeries;
@@ -154,8 +153,7 @@ class CustomerService {
     }
 
     const customer = new Customer({
-      firstName: data.firstName,
-      lastName: data.lastName,
+      fullName: data.fullName,
       phoneNumber: data.phoneNumber,
       address: data.address,
       passportSeries: data.passportSeries,

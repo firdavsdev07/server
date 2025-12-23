@@ -115,9 +115,7 @@ export class PaymentQueryService {
           $addFields: {
             customerName: {
               $concat: [
-                "$customer.firstName",
-                " ",
-                { $ifNull: ["$customer.lastName", ""] },
+                "$customer.fullName",
               ],
             },
             managerName: {

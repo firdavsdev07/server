@@ -260,7 +260,7 @@ class ContractService {
       await auditLogService.logContractCreate(
         contract._id.toString(),
         customerData._id.toString(),
-        `${customerData.firstName} ${customerData.lastName}`,
+        customerData.fullName,
         data.productName,
         data.totalPrice,
         user.sub

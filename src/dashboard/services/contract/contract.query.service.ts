@@ -45,8 +45,7 @@ export class ContractQueryService {
           pipeline: [
             {
               $project: {
-                firstName: 1,
-                lastName: 1,
+                fullName: 1,
               },
             },
           ],
@@ -82,11 +81,7 @@ export class ContractQueryService {
                     },
                   },
                   " ",
-                  { $arrayElemAt: ["$customer.firstName", 0] },
-                  " ",
-                  {
-                    $ifNull: [{ $arrayElemAt: ["$customer.lastName", 0] }, ""],
-                  },
+                  { $arrayElemAt: ["$customer.fullName", 0] },
                 ],
               },
               null,
@@ -157,8 +152,7 @@ export class ContractQueryService {
             { $unwind: { path: "$manager", preserveNullAndEmptyArrays: true } },
             {
               $project: {
-                firstName: 1,
-                lastName: 1,
+                fullName: 1,
                 percent: 1,
                 passportSeries: 1,
                 phoneNumber: 1,
@@ -206,9 +200,7 @@ export class ContractQueryService {
         $addFields: {
           customerName: {
             $concat: [
-              "$customer.firstName",
-              " ",
-              { $ifNull: ["$customer.lastName", ""] },
+              "$customer.fullName",
             ],
           },
           sellerName: {
@@ -239,7 +231,7 @@ export class ContractQueryService {
 
   /**
    * Get all completed contracts
-   * Returns: basic contract list
+   * Returns: completed contracts with customer info and calculated totals
    */
   async getAllCompleted() {
     return await Contract.aggregate([
@@ -248,6 +240,95 @@ export class ContractQueryService {
           isDeleted: false,
           isActive: true,
           status: ContractStatus.COMPLETED,
+        },
+      },
+      {
+        $lookup: {
+          from: "notes",
+          localField: "notes",
+          foreignField: "_id",
+          as: "notes",
+          pipeline: [{ $project: { text: 1 } }],
+        },
+      },
+      {
+        $lookup: {
+          from: "customers",
+          localField: "customer",
+          foreignField: "_id",
+          as: "customer",
+          pipeline: [
+            {
+              $project: {
+                fullName: 1,
+              },
+            },
+          ],
+        },
+      },
+      {
+        $lookup: {
+          from: "payments",
+          localField: "payments",
+          foreignField: "_id",
+          as: "payments",
+        },
+      },
+      {
+        $addFields: {
+          notes: { $ifNull: [{ $arrayElemAt: ["$notes.text", 0] }, null] },
+          customer: {
+            $cond: [
+              { $gt: [{ $size: "$customer" }, 0] },
+              { $toString: { $arrayElemAt: ["$customer._id", 0] } },
+              null,
+            ],
+          },
+          customerName: {
+            $cond: [
+              { $gt: [{ $size: "$customer" }, 0] },
+              {
+                $concat: [
+                  {
+                    $dateToString: {
+                      format: "%d",
+                      date: "$startDate",
+                    },
+                  },
+                  " ",
+                  { $arrayElemAt: ["$customer.fullName", 0] },
+                ],
+              },
+              null,
+            ],
+          },
+          totalPaid: {
+            $sum: {
+              $map: {
+                input: {
+                  $filter: {
+                    input: "$payments",
+                    as: "p",
+                    cond: { $eq: ["$$p.isPaid", true] }
+                  },
+                },
+                as: "pp",
+                in: { $ifNull: ["$$pp.actualAmount", "$$pp.amount"] },
+              },
+            },
+          },
+        },
+      },
+      {
+        $addFields: {
+          remainingDebt: {
+            $subtract: ["$totalPrice", "$totalPaid"],
+          },
+        },
+      },
+      {
+        $sort: {
+          createdAt: -1,
         },
       },
     ]);
@@ -283,8 +364,7 @@ export class ContractQueryService {
             { $unwind: "$manager" },
             {
               $project: {
-                firstName: 1,
-                lastName: 1,
+                fullName: 1,
                 percent: 1,
                 passportSeries: 1,
                 phoneNumber: 1,

@@ -6,13 +6,9 @@ import {
 } from "class-validator";
 
 export class CreateCustomerDtoForSeller {
-  @IsString({ message: "Ism satr bo'lishi kerak" })
-  @IsNotEmpty({ message: "Ism bo'sh bo'lmasligi kerak" })
-  firstName: string;
-
-  @IsOptional()
-  @IsString({ message: "Familiya satr bo'lishi kerak" })
-  lastName: string;
+  @IsString({ message: "Mijoz ismi satr bo'lishi kerak" })
+  @IsNotEmpty({ message: "Mijoz ismi bo'sh bo'lmasligi kerak" })
+  fullName: string;
 
   @IsOptional()
   @IsString({ message: "Telefon raqam satr bo'lishi kerak" })

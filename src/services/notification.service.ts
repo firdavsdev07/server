@@ -53,7 +53,7 @@ class NotificationService {
       const message = `
 ${statusIcon} <b>TO'LOV TASDIQLANDI</b>
 
-👤 <b>Mijoz:</b> ${customer.firstName} ${customer.lastName || ""}
+👤 <b>Mijoz:</b> ${customer.fullName}
 📦 <b>Mahsulot:</b> ${contract.productName}
 💵 <b>Summa:</b> $${actualAmount.toFixed(2)}
 📊 <b>Holat:</b> ${statusText}
@@ -92,7 +92,7 @@ ${statusIcon} <b>TO'LOV TASDIQLANDI</b>
       const message = `
 ❌ <b>TO'LOV RAD ETILDI</b>
 
-👤 <b>Mijoz:</b> ${customer.firstName} ${customer.lastName || ""}
+👤 <b>Mijoz:</b> ${customer.fullName}
 💵 <b>Summa:</b> $${actualAmount.toFixed(2)}
 📝 <b>Sabab:</b> ${reason}
 
@@ -132,7 +132,7 @@ ${statusIcon} <b>TO'LOV TASDIQLANDI</b>
       const message = `
 ⏰ <b>TO'LOV MUDDATI O'TDI</b>
 
-👤 <b>Mijoz:</b> ${customer.firstName} ${customer.lastName || ""}
+👤 <b>Mijoz:</b> ${customer.fullName}
 💵 <b>Summa:</b> $${actualAmount.toFixed(2)}
 📅 <b>Yuborilgan:</b> ${createdDate}
 
@@ -192,7 +192,7 @@ ${statusIcon} <b>TO'LOV TASDIQLANDI</b>
       const message = `
 💰 <b>KO'P TO'LOV TASDIQLANDI</b>
 
-👤 <b>Mijoz:</b> ${customer.firstName} ${customer.lastName || ""}
+👤 <b>Mijoz:</b> ${customer.fullName}
 📦 <b>Mahsulot:</b> ${contract.productName}
 💵 <b>To'langan:</b> $${actualAmount.toFixed(2)}
 📈 <b>Ortiqcha:</b> $${excess.toFixed(2)}
@@ -234,7 +234,7 @@ ${distributionText}${prepaidText}
       const message = `
 ⚠️ <b>TO'LOV KAM TASDIQLANDI</b>
 
-👤 <b>Mijoz:</b> ${customer.firstName} ${customer.lastName || ""}
+👤 <b>Mijoz:</b> ${customer.fullName}
 📦 <b>Mahsulot:</b> ${contract.productName}
 💵 <b>To'langan:</b> $${actualAmount.toFixed(2)}
 💰 <b>Kutilgan:</b> $${expectedAmount.toFixed(2)}

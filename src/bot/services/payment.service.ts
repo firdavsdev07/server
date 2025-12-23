@@ -319,7 +319,7 @@ class PaymentService {
       })
         .populate({
           path: "customerId",
-          select: "firstName lastName phone",
+          select: "fullName phoneNumber",
         })
         .populate({
           path: "notes",
@@ -344,7 +344,7 @@ class PaymentService {
           createdAt: payment.createdAt,
           customer: {
             _id: customer._id,
-            name: `${customer.firstName} ${customer.lastName || ""}`.trim(),
+            name: customer.fullName,
             phone: customer.phone,
           },
           notes: notes?.text || "",

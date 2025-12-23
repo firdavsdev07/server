@@ -9,13 +9,9 @@ import {
 } from "class-validator";
 
 class CustomerDto {
-  @IsString({ message: "Ism satr bo'lishi kerak" })
-  @IsNotEmpty({ message: "Manzil bo'sh bo'lmasligi kerak" })
-  firstName: string;
-
-  @IsOptional()
-  @IsString({ message: "Familiya satr bo'lishi kerak" })
-  lastName: string;
+  @IsString({ message: "Mijoz ismi satr bo'lishi kerak" })
+  @IsNotEmpty({ message: "Mijoz ismi bo'sh bo'lmasligi kerak" })
+  fullName: string;
 
   @IsOptional()
   @IsString({ message: "Pasport seriya satr bo'lishi kerak" })

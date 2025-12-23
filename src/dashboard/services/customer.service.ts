@@ -20,7 +20,7 @@ class CustomerService {
     return await Customer.find(filter)
       .populate({
         path: "manager",
-        select: "firstName lastName _id isDeleted",
+        select: "fullName _id isDeleted",
       })
       .sort({ createdAt: -1 });
   }
@@ -62,8 +62,7 @@ class CustomerService {
       },
       {
         $project: {
-          firstName: 1,
-          lastName: 1,
+          fullName: 1,
           phoneNumber: 1,
           address: 1,
           passportSeries: 1,
@@ -73,8 +72,7 @@ class CustomerService {
             $ifNull: [
               {
                 _id: "$manager._id",
-                firstName: "$manager.firstName",
-                lastName: "$manager.lastName",
+                fullName: "$manager.fullName",
               },
               null,
             ],
@@ -104,11 +102,11 @@ class CustomerService {
     })
       .populate({
         path: "manager",
-        select: "firstName lastName _id isDeleted",
+        select: "fullName _id isDeleted",
       })
       .populate({
         path: "editHistory.editedBy",
-        select: "firstName lastName _id",
+        select: "fullName _id",
       });
 
     if (!customer) {
@@ -263,8 +261,7 @@ class CustomerService {
     }
 
     const customer = new Customer({
-      firstName: data.firstName,
-      lastName: data.lastName,
+      fullName: data.fullName,
       phoneNumber: data.phoneNumber,
       address: data.address,
       passportSeries: data.passportSeries,
@@ -280,7 +277,7 @@ class CustomerService {
     // 🔍 AUDIT LOG: Customer yaratish
     await auditLogService.logCustomerCreate(
       customer._id.toString(),
-      `${data.firstName} ${data.lastName}`,
+      data.fullName,
       user.sub
     );
     
@@ -300,19 +297,11 @@ class CustomerService {
     // ✅ Tahrirlash tarixini yig'ish
     const changes: any[] = [];
 
-    if (data.firstName && data.firstName !== customer.firstName) {
+    if (data.fullName && data.fullName !== customer.fullName) {
       changes.push({
-        field: "Ism",
-        oldValue: customer.firstName,
-        newValue: data.firstName,
-      });
-    }
-
-    if (data.lastName && data.lastName !== customer.lastName) {
-      changes.push({
-        field: "Familiya",
-        oldValue: customer.lastName,
-        newValue: data.lastName,
+        field: "Mijoz ismi",
+        oldValue: customer.fullName,
+        newValue: data.fullName,
       });
     }
 
@@ -363,10 +352,10 @@ class CustomerService {
       changes.push({
         field: "Manager",
         oldValue: oldManager
-          ? `${oldManager.firstName} ${oldManager.lastName || ""}`
+          ? `${oldManager.firstName || ""} ${oldManager.lastName || ""}`.trim()
           : customer.manager?.toString() || "—",
         newValue: newManager
-          ? `${newManager.firstName} ${newManager.lastName || ""}`
+          ? `${newManager.firstName || ""} ${newManager.lastName || ""}`.trim()
           : data.managerId,
       });
     }
@@ -430,7 +419,7 @@ class CustomerService {
       // 🔍 AUDIT LOG: Customer tahrirlash
       await auditLogService.logCustomerUpdate(
         customer._id.toString(),
-        `${customer.firstName} ${customer.lastName}`,
+        customer.fullName,
         changes,
         user.sub
       );
@@ -439,8 +428,7 @@ class CustomerService {
     await Customer.findOneAndUpdate(
       { _id: data.id, isDeleted: false },
       {
-        firstName: data.firstName,
-        lastName: data.lastName,
+        fullName: data.fullName,
         passportSeries: data.passportSeries,
         phoneNumber: data.phoneNumber,
         birthDate: data.birthDate,
@@ -581,8 +569,7 @@ class CustomerService {
     }
 
     const customer = new Customer({
-      firstName: data.firstName,
-      lastName: data.lastName,
+      fullName: data.fullName,
       phoneNumber: data.phoneNumber,
       address: data.address,
       passportSeries: data.passportSeries,
