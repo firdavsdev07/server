@@ -114,27 +114,33 @@ class ExcelImportService {
 
   /**
    * Sanani parse qilish (Excel formatidan)
-   * ✅ TUZATILDI: Excel serial number'larni to'g'ri handle qilish
+   * ✅ TUZATILDI: Excel serial number'larni to'g'ri handle qilish + Timezone fix
    */
   private parseDate(dateStr: any, isDay: boolean = false): Date {
     if (!dateStr) {
       return new Date();
     }
 
-    // ✅ YANGI: Excel serial number (number) ni Date'ga aylantirish
-    // Excel sanalarni 1900-01-01 dan boshlab kunlar soni sifatida saqlaydi
-    // Misol: 45078 = 2023-05-18
+    // ✅ TUZATILDI: Excel serial number (number) ni Date'ga aylantirish
+    // MUAMMO: Excel sanalarni UTC da saqlaydi, lekin GMT+5 tufayli 1 kun orqaga ketadi
+    // YECHIM: UTC qiymatlarni to'g'ridan-to'g'ri ishlatish (Date.UTC bilan)
     if (typeof dateStr === 'number') {
-      // Excel serial number to Date
-      // 1900-01-01 = 1, lekin Excel'da 1900 leap year xatosi bor
-      // Shuning uchun 60 kundan keyin 1 kun qo'shamiz
-      const excelEpoch = new Date(1899, 11, 30); // 1899-12-30
-      const days = dateStr > 60 ? dateStr : dateStr - 1;
-      const milliseconds = days * 24 * 60 * 60 * 1000;
-      const date = new Date(excelEpoch.getTime() + milliseconds);
+      // Excel serial number to Date (UTC formatda)
+      // Excel: 1 = 1900-01-01, lekin 1900 leap year bug bor
+      // 25569 = 1970-01-01 (UNIX epoch)
+      const utc_days = Math.floor(dateStr - 25569);
+      const utc_value = utc_days * 86400; // seconds
+      const date_info = new Date(utc_value * 1000); // milliseconds
       
-      logger.debug(`  📅 Excel serial ${dateStr} → ${dayjs(date).format('YYYY-MM-DD')}`);
-      return date;
+      // ✅ TUZATISH: UTC qiymatlarni Date.UTC yordamida to'g'ri yaratish
+      // Bu local timezone ta'sirini to'liq olib tashlaydi
+      const year = date_info.getUTCFullYear();
+      const month = date_info.getUTCMonth();
+      const day = date_info.getUTCDate();
+      const localDate = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+      
+      logger.debug(`  📅 Excel serial ${dateStr} → ${dayjs(localDate).format('YYYY-MM-DD')} (UTC: ${year}-${(month+1).toString().padStart(2,'0')}-${day.toString().padStart(2,'0')})`);
+      return localDate;
     }
 
     // String formatga aylantirish

@@ -171,36 +171,27 @@ class CustomerService {
           $match: { remainingDebt: { $gt: 0 } }
         },
         
-        // 9️⃣ Mijoz bo'yicha guruhlash
+        // 9️⃣ ✅ YANGI: Har bir shartnomani alohida qaytarish (mijoz bo'yicha guruhlash yo'q)
+        // Bu orqali bir mijozning bir necha shartnomasi alohida ko'rinadi
         {
-          $group: {
-            _id: "$customerData._id",
-            firstName: { $first: "$customerData.firstName" },
-            lastName: { $first: "$customerData.lastName" },
-            phoneNumber: { $first: "$customerData.phoneNumber" },
-            totalDebt: { $sum: "$remainingDebt" },
-            contractsCount: { $sum: 1 },
-            oldestDate: { $min: "$nextPaymentDate" },
-            totalOverdueCount: { $sum: 1 }
+          $project: {
+            _id: "$_id", // Contract ID
+            customerId: "$customerData._id",
+            firstName: "$customerData.firstName",
+            lastName: "$customerData.lastName",
+            phoneNumber: "$customerData.phoneNumber",
+            productName: "$productName", // ✅ Shartnoma nomi
+            contractId: "$_id", // ✅ Shartnoma ID (click uchun)
+            remainingDebt: "$remainingDebt", // ✅ Shu shartnomaning qarzi
+            delayDays: "$delayDays", // ✅ Shu shartnomaning kechikishi
+            nextPaymentDate: "$nextPaymentDate",
+            totalPrice: { $ifNull: ["$totalPrice", "$price"] },
+            totalPaid: "$totalPaid",
           },
         },
         
-        // 🔟 Kechikish kunini qayta hisoblash
-        {
-          $addFields: {
-            delayDays: {
-              $floor: {
-                $divide: [
-                  { $subtract: [filterEndDate, "$oldestDate"] },
-                  1000 * 60 * 60 * 24,
-                ],
-              },
-            },
-          },
-        },
-        
-        // 1️⃣1️⃣ Tartiblash: Eng ko'p kechikkan birinchi
-        { $sort: { delayDays: -1, totalDebt: -1 } },
+        // 🔟 Tartiblash: Eng ko'p kechikkan shartnoma birinchi
+        { $sort: { delayDays: -1, remainingDebt: -1 } },
       ]);
 
       logger.debug(`✅ Found ${result.length} debtors`);
