@@ -184,6 +184,7 @@ class CustomerService {
             nextPaymentDate: "$nextPaymentDate",
             totalPrice: { $ifNull: ["$totalPrice", "$price"] },
             totalPaid: "$totalPaid",
+            startDate: "$startDate", // ✅ KUN uchun kerak!
           },
         },
         
