@@ -53,49 +53,16 @@ class CustomerService {
   async getUnpaidDebtors(user: IJwtUser, filterDate?: string) {
     try {
       logger.debug("\n🔍 === GETTING UNPAID DEBTORS ===");
-      logger.debug("👤 Manager ID:", user.sub);
-      logger.debug("📅 Original filterDate param:", filterDate || "not provided");
 
-      // ✅ Bugungi sana
-      const today = new Date();
-      today.setHours(23, 59, 59, 999);
-
-      // ✅ Filter uchun sanalar
-      let filterEndDate = today;
-      const isShowAll = !filterDate;
-
+      let filterEndDate = new Date();
       if (filterDate) {
-        // ✅ TUZATILDI: Tanlangan sanagacha bo'lgan BARCHA kechikkan to'lovlar
-        // filterStartDate kerak emas - boshidan boshlab filter qilamiz
-        const selectedDate = new Date(filterDate + 'T23:59:59.999Z');
-        filterEndDate = new Date(Math.min(selectedDate.getTime(), today.getTime()));
-
-        logger.debug("📅 Filter: UP TO SELECTED DATE:", {
-          filterEndDate: filterEndDate.toISOString(),
-        });
+        const [year, month, day] = filterDate.split('-').map(Number);
+        filterEndDate = new Date(year, month - 1, day, 23, 59, 59, 999);
       } else {
-        logger.debug("📅 Filter: ALL overdue (calendar cleared)");
+        filterEndDate.setHours(23, 59, 59, 999);
       }
 
-      // Debug
-      const totalContracts = await Contract.countDocuments({
-        isActive: true,
-        isDeleted: false,
-        status: "active",
-      });
-      logger.debug("📊 Total active contracts:", totalContracts);
-
-      // ✅ TUZATILDI: Filter shartini oldindan yaratish
-      // Ikkala holatda ham faqat filterEndDate ishlatamiz
-      const overdueFilterCondition = {
-        // Tanlangan sanagacha bo'lgan BARCHA kechikkan to'lovlar
-        $and: [
-          { $eq: ["$$p.isPaid", false] },
-          { $lte: ["$$p.date", filterEndDate] }
-        ]
-      };
-
-      logger.debug("📋 Filter condition isShowAll:", isShowAll);
+      const managerId = new Types.ObjectId(user.sub);
 
       const result = await Contract.aggregate([
         {
@@ -110,15 +77,15 @@ class CustomerService {
             from: "customers",
             localField: "customer",
             foreignField: "_id",
-            as: "customer",
+            as: "customerData",
           },
         },
-        { $unwind: "$customer" },
+        { $unwind: "$customerData" },
         {
           $match: {
-            "customer.manager": new Types.ObjectId(user.sub),
-            "customer.isActive": true,
-            "customer.isDeleted": false,
+            "customerData.manager": managerId,
+            "customerData.isActive": true,
+            "customerData.isDeleted": false,
           },
         },
         {
@@ -131,7 +98,19 @@ class CustomerService {
         },
         {
           $addFields: {
-            totalPaid: {
+            overduePayments: {
+              $filter: {
+                input: "$paymentDetails",
+                as: "p",
+                cond: {
+                  $and: [
+                    { $eq: ["$$p.isPaid", false] },
+                    { $lte: ["$$p.date", filterEndDate] }
+                  ]
+                }
+              }
+            },
+            totalActualPaid: {
               $sum: {
                 $map: {
                   input: {
@@ -145,61 +124,36 @@ class CustomerService {
                   in: { $ifNull: ["$$pp.actualAmount", "$$pp.amount"] },
                 },
               },
-            },
-            // ✅ Filter sharti alohida o'zgaruvchidan
-            filteredOverduePayments: {
-              $filter: {
-                input: "$paymentDetails",
-                as: "p",
-                cond: overdueFilterCondition
-              }
-            },
+            }
           },
         },
-        // Faqat kechikkan to'lovlari bor shartnomalar
         {
           $match: {
-            "filteredOverduePayments.0": { $exists: true }
+            "overduePayments.0": { $exists: true }
           }
         },
         {
           $addFields: {
             remainingDebt: {
-              $subtract: ["$totalPrice", "$totalPaid"],
+              $subtract: [{ $ifNull: ["$totalPrice", "$price"] }, "$totalActualPaid"],
             },
-            oldestFilteredPaymentDate: {
-              $min: "$filteredOverduePayments.date"
-            },
-            filteredOverdueCount: { $size: "$filteredOverduePayments" },
-          },
+            oldestUnpaidDate: { $min: "$overduePayments.date" },
+            overdueCount: { $size: "$overduePayments" }
+          }
         },
         {
-          $match: {
-            remainingDebt: { $gt: 0 },
-          },
-        },
-        {
-          $addFields: {
-            delayDays: {
-              $floor: {
-                $divide: [
-                  { $subtract: [filterEndDate, "$oldestFilteredPaymentDate"] },
-                  1000 * 60 * 60 * 24,
-                ],
-              },
-            },
-          },
+          $match: { remainingDebt: { $gt: 0 } }
         },
         {
           $group: {
-            _id: "$customer._id",
-            firstName: { $first: "$customer.firstName" },
-            lastName: { $first: "$customer.lastName" },
-            phoneNumber: { $first: "$customer.phoneNumber" },
+            _id: "$customerData._id",
+            firstName: { $first: "$customerData.firstName" },
+            lastName: { $first: "$customerData.lastName" },
+            phoneNumber: { $first: "$customerData.phoneNumber" },
             totalDebt: { $sum: "$remainingDebt" },
             contractsCount: { $sum: 1 },
-            oldestPaymentDate: { $min: "$oldestFilteredPaymentDate" },
-            totalOverduePayments: { $sum: "$filteredOverdueCount" },
+            oldestDate: { $min: "$oldestUnpaidDate" },
+            totalOverdueCount: { $sum: "$overdueCount" }
           },
         },
         {
@@ -207,54 +161,36 @@ class CustomerService {
             delayDays: {
               $floor: {
                 $divide: [
-                  { $subtract: [filterEndDate, "$oldestPaymentDate"] },
+                  { $subtract: [filterEndDate, "$oldestDate"] },
                   1000 * 60 * 60 * 24,
                 ],
               },
             },
           },
         },
-        {
-          $sort: { delayDays: -1 }
-        },
+        // ✅ TARTIBLASH: Kechikish kuni va qarz miqdori bo'yicha
+        { $sort: { delayDays: -1, totalDebt: -1 } },
       ]);
 
-      logger.debug(`✅ Found ${result.length} customers with overdue payments`);
-
-      if (result.length > 0) {
-        logger.debug("📋 Sample debtor:", {
-          firstName: result[0].firstName,
-          lastName: result[0].lastName,
-          delayDays: result[0].delayDays,
-          totalDebt: result[0].totalDebt,
-          contractsCount: result[0].contractsCount,
-        });
-      }
-      logger.debug("=".repeat(50) + "\n");
-
-      return {
-        status: "success",
-        data: result,
-      };
+      logger.debug(`✅ Found ${result.length} debtors up to ${filterEndDate.toISOString()}`);
+      return { status: "success", data: result };
     } catch (error) {
-      logger.error("❌ Error getting unpaid debtors:", error);
+      logger.error("❌ getUnpaidDebtors error:", error);
       throw BaseError.InternalServerError(String(error));
     }
   }
 
   async getPaidDebtors(user: IJwtUser) {
     try {
-      logger.debug("\n💰 === GETTING CUSTOMERS WITH PAYMENTS ===");
+      logger.debug("\n💰 === GETTING CUSTOMERS WITH RECENT PAYMENTS ===");
       logger.debug("👤 Manager ID:", user.sub);
 
-      // Oxirgi 30 kun ichida to'lov qilgan mijozlarni olish
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       thirtyDaysAgo.setHours(0, 0, 0, 0);
 
-      logger.debug("📅 Looking for payments since:", thirtyDaysAgo.toISOString().split("T")[0]);
+      const managerId = new Types.ObjectId(user.sub);
 
-      // Payment collection'dan to'lov qilgan mijozlarni topish
       const result = await Contract.aggregate([
         {
           $match: {
@@ -268,15 +204,15 @@ class CustomerService {
             from: "customers",
             localField: "customer",
             foreignField: "_id",
-            as: "customer",
+            as: "customerData",
           },
         },
-        { $unwind: "$customer" },
+        { $unwind: "$customerData" },
         {
           $match: {
-            "customer.manager": new Types.ObjectId(user.sub),
-            "customer.isActive": true,
-            "customer.isDeleted": false,
+            "customerData.manager": managerId,
+            "customerData.isActive": true,
+            "customerData.isDeleted": false,
           },
         },
         {
@@ -287,7 +223,6 @@ class CustomerService {
             as: "paymentDetails",
           },
         },
-        // Faqat oxirgi 30 kun ichida to'lov qilgan shartnomalar
         {
           $addFields: {
             recentPayments: {
@@ -306,7 +241,7 @@ class CustomerService {
         },
         {
           $match: {
-            "recentPayments.0": { $exists: true }, // Kamida 1 ta to'lov bo'lishi kerak
+            "recentPayments.0": { $exists: true },
           },
         },
         {
@@ -327,59 +262,33 @@ class CustomerService {
               },
             },
             lastPaymentDate: {
-              $max: {
-                $map: {
-                  input: "$recentPayments",
-                  as: "p",
-                  in: "$$p.date",
-                },
-              },
+              $max: "$recentPayments.date",
             },
+          },
+        },
+        {
+          $group: {
+            _id: "$customerData._id",
+            firstName: { $first: "$customerData.firstName" },
+            lastName: { $first: "$customerData.lastName" },
+            phoneNumber: { $first: "$customerData.phoneNumber" },
+            lastPaymentDate: { $max: "$lastPaymentDate" },
+            totalPaid: { $sum: "$totalPaid" },
+            totalPrice: { $sum: { $ifNull: ["$totalPrice", "$price"] } },
+            contractsCount: { $sum: 1 },
           },
         },
         {
           $addFields: {
-            remainingDebt: {
-              $subtract: ["$totalPrice", "$totalPaid"],
-            },
-          },
+            remainingDebt: { $subtract: ["$totalPrice", "$totalPaid"] }
+          }
         },
-        // Mijozlar bo'yicha guruhlash
-        {
-          $group: {
-            _id: "$customer._id",
-            firstName: { $first: "$customer.firstName" },
-            lastName: { $first: "$customer.lastName" },
-            phoneNumber: { $first: "$customer.phoneNumber" },
-            lastPaymentDate: { $max: "$lastPaymentDate" },
-            totalPaid: { $sum: "$totalPaid" },
-            totalDebt: { $sum: "$totalPrice" },
-            remainingDebt: { $sum: "$remainingDebt" },
-            contractsCount: { $sum: 1 },
-          },
-        },
-        { $sort: { lastPaymentDate: -1 } }, // Eng oxirgi to'lov qilganlar birinchi
+        { $sort: { lastPaymentDate: -1 } },
       ]);
 
-      logger.debug(`✅ Found ${result.length} customers with recent payments`);
-
-      if (result.length > 0) {
-        logger.debug("📋 Sample customer:", {
-          firstName: result[0].firstName,
-          lastName: result[0].lastName,
-          lastPaymentDate: result[0].lastPaymentDate,
-          totalPaid: result[0].totalPaid,
-          remainingDebt: result[0].remainingDebt,
-        });
-      }
-      logger.debug("=".repeat(50) + "\n");
-
-      return {
-        status: "success",
-        data: result,
-      };
+      return { status: "success", data: result };
     } catch (error) {
-      logger.error("❌ Error getting customers with payments:", error);
+      logger.error("❌ Error getting paid debtors:", error);
       throw BaseError.InternalServerError(String(error));
     }
   }
