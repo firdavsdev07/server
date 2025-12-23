@@ -137,7 +137,14 @@ class EmployeeService {
       },
       "_id firstName lastName"
     );
-    return managers;
+    
+    // Frontend uchun fullName qo'shamiz
+    return managers.map((manager) => ({
+      _id: manager._id,
+      firstName: manager.firstName,
+      lastName: manager.lastName,
+      fullName: `${manager.firstName} ${manager.lastName}`,
+    }));
   }
 
   async create(data: CreateEmployeeDto, user: IJwtUser) {
