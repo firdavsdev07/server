@@ -61,19 +61,16 @@ class CustomerService {
       today.setHours(23, 59, 59, 999);
 
       // ✅ Filter uchun sanalar
-      let filterStartDate: Date = new Date('1970-01-01T00:00:00.000Z');
       let filterEndDate = today;
       const isShowAll = !filterDate;
 
       if (filterDate) {
+        // ✅ TUZATILDI: Tanlangan sanagacha bo'lgan BARCHA kechikkan to'lovlar
+        // filterStartDate kerak emas - boshidan boshlab filter qilamiz
         const selectedDate = new Date(filterDate + 'T23:59:59.999Z');
-        filterStartDate = new Date(selectedDate);
-        filterStartDate.setUTCDate(1);
-        filterStartDate.setUTCHours(0, 0, 0, 0);
         filterEndDate = new Date(Math.min(selectedDate.getTime(), today.getTime()));
 
-        logger.debug("📅 Filter: MONTH RANGE:", {
-          filterStartDate: filterStartDate.toISOString(),
+        logger.debug("📅 Filter: UP TO SELECTED DATE:", {
           filterEndDate: filterEndDate.toISOString(),
         });
       } else {
@@ -89,22 +86,14 @@ class CustomerService {
       logger.debug("📊 Total active contracts:", totalContracts);
 
       // ✅ TUZATILDI: Filter shartini oldindan yaratish
-      const overdueFilterCondition = isShowAll
-        ? {
-          // BARCHA kechikkan to'lovlar (bugungi kungacha)
-          $and: [
-            { $eq: ["$$p.isPaid", false] },
-            { $lte: ["$$p.date", today] }
-          ]
-        }
-        : {
-          // Faqat tanlangan oy ichidagi
-          $and: [
-            { $eq: ["$$p.isPaid", false] },
-            { $gte: ["$$p.date", filterStartDate] },
-            { $lte: ["$$p.date", filterEndDate] }
-          ]
-        };
+      // Ikkala holatda ham faqat filterEndDate ishlatamiz
+      const overdueFilterCondition = {
+        // Tanlangan sanagacha bo'lgan BARCHA kechikkan to'lovlar
+        $and: [
+          { $eq: ["$$p.isPaid", false] },
+          { $lte: ["$$p.date", filterEndDate] }
+        ]
+      };
 
       logger.debug("📋 Filter condition isShowAll:", isShowAll);
 
