@@ -46,7 +46,7 @@ class CashService {
         .populate("managerId", "firstName lastName")
         .populate("notes", "text")
         .select(
-          "_id amount actualAmount date isPaid paymentType notes customerId managerId status remainingAmount excessAmount expectedAmount confirmedAt confirmedBy targetMonth createdAt updatedAt"
+          "_id amount actualAmount date isPaid paymentType notes customerId managerId status remainingAmount excessAmount expectedAmount confirmedAt confirmedBy targetMonth nextPaymentDate createdAt updatedAt"
         )
         .sort({ date: -1 })
         .lean();
