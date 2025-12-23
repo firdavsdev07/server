@@ -24,7 +24,8 @@ export enum AuditEntity {
   EMPLOYEE = "employee",
   BALANCE = "balance",
   AUTH = "auth",
-  EXCEL_IMPORT = "excel_import"
+  EXCEL_IMPORT = "excel_import",
+  EXPENSES = "expenses"
 }
 
 export interface IAuditMetadata {
@@ -47,12 +48,21 @@ export interface IAuditMetadata {
   monthlyPayment?: number;
   totalPrice?: number;
   
+  // Expenses uchun
+  dollar?: number;
+  sum?: number;
+  expensesNotes?: string;
+  managerName?: string;
+  
   // General
   affectedEntities?: {
     entityType: string;
     entityId: string;
     entityName?: string;
   }[];
+  
+  // Mijoz ismi (to'lovlar uchun)
+  customerName?: string;
 }
 
 export interface IAuditLog {
@@ -137,6 +147,15 @@ const AuditLogSchema = new Schema<IAuditLog>(
       contractStatus: String,
       monthlyPayment: Number,
       totalPrice: Number,
+      
+      // Expenses
+      dollar: Number,
+      sum: Number,
+      expensesNotes: String,
+      managerName: String,
+      
+      // Mijoz ismi
+      customerName: String,
       
       // Affected entities
       affectedEntities: [

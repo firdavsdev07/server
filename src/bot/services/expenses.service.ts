@@ -6,6 +6,7 @@ import { Balance } from "../../schemas/balance.schema";
 import { Expenses } from "../../schemas/expenses.schema";
 import { Types } from "mongoose";
 import { AddExpensesDto, UpdateExpensesDto } from "../../validators/expenses";
+import auditLogService from "../../services/audit-log.service";
 
 class ExpensesSrvice {
   async subtractFromBalance(
@@ -72,9 +73,22 @@ class ExpensesSrvice {
       notes: addData.notes,
     });
     await expenses.save();
+
+    // Audit log
+    const managerName = `${manager.firstName} ${manager.lastName}`;
+    await auditLogService.logExpensesCreate(
+      expenses._id.toString(),
+      manager._id.toString(),
+      managerName,
+      dollar,
+      sum,
+      addData.notes || "",
+      user.sub
+    );
+
     return {
       status: "success",
-      message: "Xarajat muvaffaqiyatli qo‘shildi",
+      message: "Xarajat muvaffaqiyatli qo'shildi",
     };
   }
 
@@ -145,9 +159,20 @@ class ExpensesSrvice {
     existingExpenses.isActive = false;
     await existingExpenses.save();
 
+    // Audit log
+    const managerName = `${manager.firstName} ${manager.lastName}`;
+    await auditLogService.logExpensesReturn(
+      id,
+      manager._id.toString(),
+      managerName,
+      oldCurrency.dollar,
+      oldCurrency.sum,
+      user.sub
+    );
+
     return {
       status: "success",
-      message: "Xarajat muvaffaqiyatli yangilandi.",
+      message: "Xarajat muvaffaqiyatli qaytarildi.",
     };
   }
 }

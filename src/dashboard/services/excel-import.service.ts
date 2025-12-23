@@ -520,6 +520,7 @@ class ExcelImportService {
   private async createPayments(
     contractId: Types.ObjectId,
     customerId: Types.ObjectId,
+    customerName: string,
     managerId: Types.ObjectId,
     monthlyPayments: Array<{ month: string; year: number; amount: number }>,
     expectedMonthlyPayment: number,
@@ -678,7 +679,7 @@ class ExcelImportService {
           paymentDoc._id.toString(),
           contractId.toString(),
           customerId.toString(),
-          "Customer Name", // Bu yerda customer nomini olish kerak
+          customerName, // ✅ To'g'ri customer ismi
           monthPayment.paidAmount,
           "monthly",
           monthPayment.monthIndex,
@@ -762,8 +763,9 @@ class ExcelImportService {
         logger.debug(`\nProcessing row ${rowNumber}: ${row[3]}`);
 
         // 1. Mijozni yaratish yoki topish
+        const customerName = row[3] ? row[3].toString().trim() : "Unknown Customer";
         const customerId = await this.findOrCreateCustomer(
-          row[3],
+          customerName,
           managerObjectId
         );
 
@@ -913,6 +915,7 @@ class ExcelImportService {
           const paymentIds = await this.createPayments(
             contract._id as Types.ObjectId,
             customerId,
+            customerName, // ✅ Customer ismi
             managerObjectId,
             monthlyPayments,
             contractData.monthlyPayment,

@@ -75,6 +75,7 @@ class EmployeeController {
   }
   async withdrawFromBalance(req: Request, res: Response, next: NextFunction) {
     try {
+      const user = req.user;
       const withdraw = plainToInstance(withdrawFromBalanceDto, req.body || {});
       const errors = await validate(withdraw);
       if (errors.length > 0) {
@@ -83,7 +84,7 @@ class EmployeeController {
           BaseError.BadRequest("Yechish malumotlari xato.", formattedErrors)
         );
       }
-      const data = await employeeService.withdrawFromBalance(withdraw);
+      const data = await employeeService.withdrawFromBalance(withdraw, user);
       res.status(200).json(data);
     } catch (error) {
       return next(error);

@@ -9,7 +9,8 @@ class EmployeeController {
       if (!id) {
         return next(BaseError.BadRequest("ID mavjud emas"));
       }
-      const data = await expensesService.return(id);
+      const user = req.user;
+      const data = await expensesService.return(id, user);
       res.status(200).json(data);
     } catch (error) {
       return next(error);

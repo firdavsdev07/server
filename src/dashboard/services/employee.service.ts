@@ -13,6 +13,7 @@ import { Role } from "../../schemas/role.schema";
 import IJwtUser from "../../types/user";
 import { withdrawFromBalanceDto } from "../../validators/expenses";
 import { Balance } from "../../schemas/balance.schema";
+import auditLogService from "../../services/audit-log.service";
 
 class EmployeeService {
   async findUserById(id: string) {
@@ -278,7 +279,7 @@ class EmployeeService {
     }
   }
 
-  async withdrawFromBalance(data: withdrawFromBalanceDto) {
+  async withdrawFromBalance(data: withdrawFromBalanceDto, user?: IJwtUser) {
     try {
       logger.debug("💰 === WITHDRAW FROM BALANCE START ===");
       logger.debug("Employee ID:", data._id);
@@ -360,6 +361,20 @@ class EmployeeService {
         newDollar: balance.dollar,
         newSum: balance.sum,
       });
+
+      // 4. Audit log qo'shish
+      if (user) {
+        const managerName = `${employeeExist.firstName} ${employeeExist.lastName}`;
+        await auditLogService.logExpensesCreate(
+          expense._id.toString(),
+          employeeExist._id.toString(),
+          managerName,
+          totalDollarsToWithdraw,
+          0,
+          data.notes || "Balansdan pul yechib olindi",
+          user.sub // Kim yechib olganini ko'rsatamiz
+        );
+      }
 
       logger.debug("💰 === WITHDRAW FROM BALANCE SUCCESS ===");
 

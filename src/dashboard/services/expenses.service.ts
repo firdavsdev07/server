@@ -6,6 +6,7 @@ import BaseError from "../../utils/base.error";
 import { Balance } from "../../schemas/balance.schema";
 import { Expenses } from "../../schemas/expenses.schema";
 import { Types } from "mongoose";
+import auditLogService from "../../services/audit-log.service";
 
 class ExpensesSrvice {
   async subtractFromBalance(
@@ -85,7 +86,7 @@ class ExpensesSrvice {
     };
   }
 
-  async return(id: string) {
+  async return(id: string, user?: IJwtUser) {
     const existingExpenses = await Expenses.findById(id).populate("managerId");
 
     if (!existingExpenses) {
@@ -118,6 +119,20 @@ class ExpensesSrvice {
 
     existingExpenses.isActive = false;
     await existingExpenses.save();
+
+    // Audit log
+    if (user) {
+      const manager = existingExpenses.managerId as IEmployee;
+      const managerName = `${manager.firstName} ${manager.lastName}`;
+      await auditLogService.logExpensesReturn(
+        id,
+        manager._id.toString(),
+        managerName,
+        existingExpenses.dollar,
+        existingExpenses.sum,
+        user.sub
+      );
+    }
 
     return {
       status: "success",

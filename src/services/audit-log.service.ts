@@ -172,6 +172,7 @@ class AuditLogService {
       userId,
       metadata: {
         ...paymentMetadata,
+        customerName, // Mijoz ismini qo'shamiz
         affectedEntities: [
           {
             entityType: "payment",
@@ -187,6 +188,75 @@ class AuditLogService {
             entityType: "customer",
             entityId: customerId,
             entityName: customerName,
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Xarajatlar (Expenses) yaratish audit log
+   */
+  async logExpensesCreate(
+    expensesId: string,
+    managerId: string,
+    managerName: string,
+    dollar: number,
+    sum: number,
+    notes: string,
+    userId: string
+  ): Promise<void> {
+    await this.createLog({
+      action: AuditAction.CREATE,
+      entity: AuditEntity.EXPENSES,
+      entityId: expensesId,
+      userId,
+      metadata: {
+        dollar,
+        sum,
+        expensesNotes: notes,
+        managerName,
+        affectedEntities: [
+          {
+            entityType: "expenses",
+            entityId: expensesId,
+            entityName: `${managerName} - $${dollar}`,
+          },
+          {
+            entityType: "employee",
+            entityId: managerId,
+            entityName: managerName,
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Xarajatlar (Expenses) qaytarish audit log
+   */
+  async logExpensesReturn(
+    expensesId: string,
+    managerId: string,
+    managerName: string,
+    dollar: number,
+    sum: number,
+    userId: string
+  ): Promise<void> {
+    await this.createLog({
+      action: AuditAction.DELETE,
+      entity: AuditEntity.EXPENSES,
+      entityId: expensesId,
+      userId,
+      metadata: {
+        dollar,
+        sum,
+        managerName,
+        affectedEntities: [
+          {
+            entityType: "expenses",
+            entityId: expensesId,
+            entityName: `${managerName} - Qaytarildi ($${dollar})`,
           },
         ],
       },

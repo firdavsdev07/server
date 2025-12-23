@@ -521,11 +521,14 @@ class PaymentService {
       const contract = await Contract.findOne({
         customer: payment.customerId,
         status: ContractStatus.ACTIVE,
-      });
+      }).populate("customer", "fullName");
 
       if (!contract) {
         throw BaseError.NotFoundError("Faol shartnoma topilmadi");
       }
+      
+      // Customer name olish
+      const customerName = (contract.customer as any)?.fullName || "Unknown Customer";
 
       // Agar payment hali contract.payments da bo'lmasa, qo'shish
       if (!contract.payments) {
@@ -682,7 +685,8 @@ class PaymentService {
             paymentType: "monthly",
             paymentStatus: payment.status,
             amount: payment.actualAmount || payment.amount,
-            targetMonth: payment.targetMonth  // ✅ Qaysi oy ekani qo'shildi
+            targetMonth: payment.targetMonth,  // ✅ Qaysi oy ekani qo'shildi
+            customerName: customerName  // ✅ Mijoz ismi qo'shildi
           }
         });
         logger.debug("✅ Audit log created for payment confirmation");
@@ -1563,6 +1567,7 @@ class PaymentService {
             paymentStatus: payment.status,
             amount: payment.amount,
             targetMonth: payment.targetMonth,
+            customerName: auditData.customerName, // ✅ Mijoz ismi
             affectedEntities: [
               {
                 entityType: "contract",
