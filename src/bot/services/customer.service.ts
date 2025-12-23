@@ -61,21 +61,15 @@ class CustomerService {
       today.setHours(23, 59, 59, 999);
 
       // ✅ Filter uchun sanalar
-      // filterStartDate - default: juda eski sana (barcha to'lovlar o'tadi)
       let filterStartDate: Date = new Date('1970-01-01T00:00:00.000Z');
       let filterEndDate = today;
       const isShowAll = !filterDate;
 
       if (filterDate) {
-        // Tanlangan sana (masalan, 2024-12-23)
         const selectedDate = new Date(filterDate + 'T23:59:59.999Z');
-
-        // Oy boshi (masalan, 2024-12-01 00:00:00)
         filterStartDate = new Date(selectedDate);
         filterStartDate.setUTCDate(1);
         filterStartDate.setUTCHours(0, 0, 0, 0);
-
-        // Filter end: tanlangan sana yoki bugun (qaysi kichik)
         filterEndDate = new Date(Math.min(selectedDate.getTime(), today.getTime()));
 
         logger.debug("📅 Filter: MONTH RANGE:", {
@@ -83,7 +77,7 @@ class CustomerService {
           filterEndDate: filterEndDate.toISOString(),
         });
       } else {
-        logger.debug("� Filter: ALL overdue (calendar cleared)");
+        logger.debug("📅 Filter: ALL overdue (calendar cleared)");
       }
 
       // Debug
@@ -94,9 +88,27 @@ class CustomerService {
       });
       logger.debug("📊 Total active contracts:", totalContracts);
 
-      // ✅ YANGI MANTIQ: Payment.date bo'yicha filter
+      // ✅ TUZATILDI: Filter shartini oldindan yaratish
+      const overdueFilterCondition = isShowAll
+        ? {
+          // BARCHA kechikkan to'lovlar (bugungi kungacha)
+          $and: [
+            { $eq: ["$$p.isPaid", false] },
+            { $lte: ["$$p.date", today] }
+          ]
+        }
+        : {
+          // Faqat tanlangan oy ichidagi
+          $and: [
+            { $eq: ["$$p.isPaid", false] },
+            { $gte: ["$$p.date", filterStartDate] },
+            { $lte: ["$$p.date", filterEndDate] }
+          ]
+        };
+
+      logger.debug("📋 Filter condition isShowAll:", isShowAll);
+
       const result = await Contract.aggregate([
-        // 1. Barcha aktiv shartnomalar
         {
           $match: {
             isActive: true,
@@ -104,7 +116,6 @@ class CustomerService {
             status: "active",
           },
         },
-        // 2. Customer bilan birlashtirish
         {
           $lookup: {
             from: "customers",
@@ -121,7 +132,6 @@ class CustomerService {
             "customer.isDeleted": false,
           },
         },
-        // 3. Payments bilan birlashtirish
         {
           $lookup: {
             from: "payments",
@@ -130,10 +140,8 @@ class CustomerService {
             as: "paymentDetails",
           },
         },
-        // 4. To'lovlarni hisoblash
         {
           $addFields: {
-            // To'langan summa
             totalPaid: {
               $sum: {
                 $map: {
@@ -149,60 +157,38 @@ class CustomerService {
                 },
               },
             },
-            // ✅ YANGI: Filter bo'yicha kechikkan to'lovlar
-            // - isShowAll: barcha to'lanmagan (date <= today)
-            // - filterDate: faqat shu oy ichidagi (filterStartDate <= date <= filterEndDate)
+            // ✅ Filter sharti alohida o'zgaruvchidan
             filteredOverduePayments: {
               $filter: {
                 input: "$paymentDetails",
                 as: "p",
-                cond: isShowAll
-                  ? {
-                    // BARCHA kechikkan to'lovlar (bugungi kungacha)
-                    $and: [
-                      { $eq: ["$$p.isPaid", false] },
-                      { $lte: ["$$p.date", today] }
-                    ]
-                  }
-                  : {
-                    // Faqat tanlangan oy ichidagi (1-dan tanlangan kungacha)
-                    $and: [
-                      { $eq: ["$$p.isPaid", false] },
-                      { $gte: ["$$p.date", filterStartDate] },
-                      { $lte: ["$$p.date", filterEndDate] }
-                    ]
-                  }
+                cond: overdueFilterCondition
               }
             },
           },
         },
-        // 5. ✅ Faqat filterlangan kechikkan to'lovlari bor shartnomalar
+        // Faqat kechikkan to'lovlari bor shartnomalar
         {
           $match: {
             "filteredOverduePayments.0": { $exists: true }
           }
         },
-        // 6. Qo'shimcha ma'lumotlar
         {
           $addFields: {
             remainingDebt: {
               $subtract: ["$totalPrice", "$totalPaid"],
             },
-            // Filterlangan to'lovlardan eng eskisi
             oldestFilteredPaymentDate: {
               $min: "$filteredOverduePayments.date"
             },
             filteredOverdueCount: { $size: "$filteredOverduePayments" },
-            filteredOverdueAmount: { $sum: "$filteredOverduePayments.amount" },
           },
         },
-        // 7. Faqat qarzi bor
         {
           $match: {
             remainingDebt: { $gt: 0 },
           },
         },
-        // 8. Kechikish kunlarini hisoblash
         {
           $addFields: {
             delayDays: {
@@ -215,7 +201,6 @@ class CustomerService {
             },
           },
         },
-        // 9. Mijozlar bo'yicha guruhlash
         {
           $group: {
             _id: "$customer._id",
@@ -228,7 +213,6 @@ class CustomerService {
             totalOverduePayments: { $sum: "$filteredOverdueCount" },
           },
         },
-        // 10. Final delayDays
         {
           $addFields: {
             delayDays: {
@@ -241,7 +225,6 @@ class CustomerService {
             },
           },
         },
-        // 11. Eng ko'p kechikkanlar birinchi
         {
           $sort: { delayDays: -1 }
         },
