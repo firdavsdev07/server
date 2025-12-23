@@ -203,6 +203,22 @@ class CustomerService {
           },
         },
       },
+      {
+        $project: {
+          _id: 1,
+          productName: 1,
+          totalPrice: 1,
+          initialPayment: 1,
+          monthlyPayment: 1,
+          totalPaid: 1,
+          remainingDebt: 1,
+          startDate: 1,
+          status: 1,
+          payments: 1,
+          notes: 1,
+          createdAt: 1,
+        },
+      },
       { $sort: { createdAt: -1 } },
     ]);
 
