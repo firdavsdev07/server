@@ -53,21 +53,29 @@ class CustomerService {
   async getUnpaidDebtors(user: IJwtUser, filterDate?: string) {
     try {
       logger.debug("\n🔍 === GETTING UNPAID DEBTORS ===");
+      logger.debug(`👤 Manager ID: ${user.sub}`);
+      logger.debug(`📅 Filter date param: ${filterDate || 'none (using today)'}`);
 
-      let filterEndDate = new Date();
-      // ✅ TUZATISH: Bo'sh string va undefined ni bir xil deb qarash
+      // ✅ Sodda logika: sana berilgan bo'lsa ishlatamiz, yo'q bo'lsa bugungi kun
+      let filterEndDate: Date;
+      
       if (filterDate && filterDate.trim() !== "") {
+        // Sana formatini parse qilish: "YYYY-MM-DD"
         const [year, month, day] = filterDate.split('-').map(Number);
         filterEndDate = new Date(year, month - 1, day, 23, 59, 59, 999);
-        logger.debug(`📅 Filter date: ${filterDate} -> ${filterEndDate.toISOString()}`);
+        logger.debug(`📅 Using filter date: ${filterDate} -> ${filterEndDate.toISOString()}`);
       } else {
+        // Default: bugungi kun
+        filterEndDate = new Date();
         filterEndDate.setHours(23, 59, 59, 999);
-        logger.debug(`📅 No filter - using today: ${filterEndDate.toISOString()}`);
+        logger.debug(`📅 Using today: ${filterEndDate.toISOString()}`);
       }
 
       const managerId = new Types.ObjectId(user.sub);
 
+      // ✅ Soddalashtirilgan aggregation
       const result = await Contract.aggregate([
+        // 1️⃣ Faol shartnomalarni filtrlash
         {
           $match: {
             isActive: true,
@@ -75,6 +83,8 @@ class CustomerService {
             status: "active",
           },
         },
+        
+        // 2️⃣ Mijozlarni join qilish
         {
           $lookup: {
             from: "customers",
@@ -84,6 +94,8 @@ class CustomerService {
           },
         },
         { $unwind: "$customerData" },
+        
+        // 3️⃣ Faqat o'z menejerining mijozlari
         {
           $match: {
             "customerData.manager": managerId,
@@ -91,6 +103,8 @@ class CustomerService {
             "customerData.isDeleted": false,
           },
         },
+        
+        // 4️⃣ To'lovlarni join qilish
         {
           $lookup: {
             from: "payments",
@@ -99,8 +113,11 @@ class CustomerService {
             as: "paymentDetails",
           },
         },
+        
+        // 5️⃣ Kechikkan to'lovlarni topish
         {
           $addFields: {
+            // Kechikkan to'lovlar: to'lanmagan va sanasi filterEndDate dan kichik
             overduePayments: {
               $filter: {
                 input: "$paymentDetails",
@@ -113,7 +130,8 @@ class CustomerService {
                 }
               }
             },
-            totalActualPaid: {
+            // To'langan summani hisoblash
+            totalPaid: {
               $sum: {
                 $map: {
                   input: {
@@ -130,23 +148,34 @@ class CustomerService {
             }
           },
         },
+        
+        // 6️⃣ Faqat kechikkan to'lovlari bor shartnomalar
         {
           $match: {
             "overduePayments.0": { $exists: true }
           }
         },
+        
+        // 7️⃣ Qolgan qarzni hisoblash
         {
           $addFields: {
             remainingDebt: {
-              $subtract: [{ $ifNull: ["$totalPrice", "$price"] }, "$totalActualPaid"],
+              $subtract: [
+                { $ifNull: ["$totalPrice", "$price"] }, 
+                "$totalPaid"
+              ],
             },
             oldestUnpaidDate: { $min: "$overduePayments.date" },
             overdueCount: { $size: "$overduePayments" }
           }
         },
+        
+        // 8️⃣ Faqat qarzi bor shartnomalar
         {
           $match: { remainingDebt: { $gt: 0 } }
         },
+        
+        // 9️⃣ Mijoz bo'yicha guruhlash
         {
           $group: {
             _id: "$customerData._id",
@@ -159,6 +188,8 @@ class CustomerService {
             totalOverdueCount: { $sum: "$overdueCount" }
           },
         },
+        
+        // 🔟 Kechikish kunini hisoblash
         {
           $addFields: {
             delayDays: {
@@ -171,11 +202,21 @@ class CustomerService {
             },
           },
         },
-        // ✅ TARTIBLASH: Kechikish kuni va qarz miqdori bo'yicha
+        
+        // 1️⃣1️⃣ Tartiblash: Eng ko'p kechikkan birinchi
         { $sort: { delayDays: -1, totalDebt: -1 } },
       ]);
 
-      logger.debug(`✅ Found ${result.length} debtors up to ${filterEndDate.toISOString()}`);
+      logger.debug(`✅ Found ${result.length} debtors`);
+      if (result.length > 0) {
+        logger.debug(`📊 Sample debtor:`, {
+          name: `${result[0].firstName} ${result[0].lastName}`,
+          totalDebt: result[0].totalDebt,
+          delayDays: result[0].delayDays,
+          overdueCount: result[0].totalOverdueCount
+        });
+      }
+      
       return { status: "success", data: result };
     } catch (error) {
       logger.error("❌ getUnpaidDebtors error:", error);
