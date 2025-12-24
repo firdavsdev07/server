@@ -782,13 +782,15 @@ class CustomerService {
       debtorContractsCount: debtorContracts.length,
     });
 
-    // ✅ TUZATISH: allContracts -> activeContracts, completedContracts -> paidContracts
+    // ✅ MUHIM TUZATISH: Frontend `allContracts` va `paidContracts` kutadi
+    // Backend esa `activeContracts` va `completedContracts` qaytarmoqda edi
+    // Bu nomuvofiqlik tufayli shartnomalar ko'rinmasdi
     const response = {
       status: "success",
       data: {
-        allContracts: activeContracts || [], // ✅ Faqat faol shartnomalar
-        paidContracts: completedContracts || [], // ✅ Tugallangan shartnomalar
-        debtorContracts: debtorContracts || [],
+        allContracts: allContracts || [], // ✅ Barcha shartnomalar (active + completed)
+        paidContracts: paidContracts || [], // ✅ To'langan qarzdor shartnomalar
+        debtorContracts: debtorContracts || [], // ✅ To'lanmagan qarzdor shartnomalar
       },
     };
 
