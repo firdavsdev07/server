@@ -6,10 +6,7 @@ import IJwtUser from "../../types/user";
 import auditLogService from "../../services/audit-log.service";
 
 class CashService {
-  /**
-   * Tasdiqlanmagan to'lovlarni olish
-   * Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 9.1, 9.2
-   */
+
   async getPendingPayments() {
     try {
       logger.log("🔍 === FETCHING PENDING PAYMENTS FOR CASH ===");
@@ -29,9 +26,6 @@ class CashService {
         totalPaid: paidCount,
       });
 
-      // ✅ Faqat PENDING statusdagi to'lovlarni olish
-      // Kassa sahifasida faqat tasdiqlanmagan to'lovlar ko'rinishi kerak
-      // status: PENDING - hali tasdiqlanmagan (bot'dan kelgan)
       const payments = await Payment.find({
         status: PaymentStatus.PENDING,
       })
@@ -40,10 +34,10 @@ class CashService {
           select: "fullName phoneNumber manager",
           populate: {
             path: "manager",
-            select: "fullName",
+            select: "firstName lastName",
           },
         })
-        .populate("managerId", "fullName")
+        .populate("managerId", "firstName lastName")
         .populate("notes", "text")
         .select(
           "_id amount actualAmount date isPaid paymentType notes customerId managerId status remainingAmount excessAmount expectedAmount confirmedAt confirmedBy targetMonth nextPaymentDate createdAt updatedAt"
@@ -55,12 +49,10 @@ class CashService {
 
       // ✅ Har bir payment uchun contractId topish
       const Contract = (await import("../../schemas/contract.schema")).default;
-      
+
       const paymentsWithContract = await Promise.all(
         payments.map(async (payment: any) => {
           try {
-            // ✅ YANGI MANTIQ: Payment ID orqali yoki customer ID orqali contract topish
-            // PENDING to'lovlar Contract.payments arrayida bo'lmaydi, shuning uchun customer ID dan topamiz
             let contract = await Contract.findOne({
               payments: payment._id,
             })

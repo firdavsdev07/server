@@ -203,9 +203,12 @@ export class PaymentConfirmationService extends PaymentBaseService {
       await contract.save();
       logger.debug("💾 Contract saved with updated nextPaymentDate");
 
-      // Audit log yaratish
+      // Audit log yaratish - customerName bilan
+      const customer = await Customer.findById(payment.customerId);
+      const customerName = customer?.fullName || "Noma'lum mijoz";
+
       await this.createAuditLog({
-        action: (await import("../../../schemas/audit-log.schema")).AuditAction.PAYMENT_CONFIRMED,
+        action: (await import("../../../schemas/audit-log.schema")).AuditAction.CONFIRM,
         entity: (await import("../../../schemas/audit-log.schema")).AuditEntity.PAYMENT,
         entityId: paymentId,
         userId: user.sub,
@@ -216,9 +219,11 @@ export class PaymentConfirmationService extends PaymentBaseService {
           { field: "confirmedAt", oldValue: null, newValue: payment.confirmedAt }
         ],
         metadata: {
+          customerName, // ✅ Mijoz ismi
           paymentType: "monthly",
           paymentStatus: payment.status,
-          amount: payment.actualAmount || payment.amount
+          amount: payment.actualAmount || payment.amount,
+          targetMonth: payment.targetMonth,
         }
       });
 
