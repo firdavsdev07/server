@@ -130,6 +130,14 @@ class PaymentController {
 
       const { contractId, targetMonth, reminderDate } = req.body;
 
+      logger.debug("🔔 Set reminder request:", {
+        contractId,
+        targetMonth,
+        targetMonthType: typeof targetMonth,
+        reminderDate,
+        userId: user.sub
+      });
+
       if (!contractId || !targetMonth || !reminderDate) {
         return res.status(400).json({
           status: "error",
@@ -137,9 +145,19 @@ class PaymentController {
         });
       }
 
+      // ✅ TUZATISH: targetMonth'ni number'ga aylantirish (frontend'dan string kelishi mumkin)
+      const targetMonthNumber = Number(targetMonth);
+      
+      if (isNaN(targetMonthNumber) || targetMonthNumber < 1) {
+        return res.status(400).json({
+          status: "error",
+          message: "targetMonth raqam bo'lishi va 1 dan katta bo'lishi kerak",
+        });
+      }
+
       const result = await paymentService.setPaymentReminder(
         contractId,
-        targetMonth,
+        targetMonthNumber,
         reminderDate,
         user
       );
@@ -168,6 +186,13 @@ class PaymentController {
 
       const { contractId, targetMonth } = req.body;
 
+      logger.debug("🔕 Remove reminder request:", {
+        contractId,
+        targetMonth,
+        targetMonthType: typeof targetMonth,
+        userId: user.sub
+      });
+
       if (!contractId || !targetMonth) {
         return res.status(400).json({
           status: "error",
@@ -175,9 +200,19 @@ class PaymentController {
         });
       }
 
+      // ✅ TUZATISH: targetMonth'ni number'ga aylantirish
+      const targetMonthNumber = Number(targetMonth);
+      
+      if (isNaN(targetMonthNumber) || targetMonthNumber < 1) {
+        return res.status(400).json({
+          status: "error",
+          message: "targetMonth raqam bo'lishi va 1 dan katta bo'lishi kerak",
+        });
+      }
+
       const result = await paymentService.removePaymentReminder(
         contractId,
-        targetMonth,
+        targetMonthNumber,
         user
       );
       

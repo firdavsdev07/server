@@ -462,11 +462,46 @@ class PaymentService {
       }
 
       // Target month uchun payment topish
+      logger.debug("🔍 Searching for payment:", {
+        targetMonth,
+        targetMonthType: typeof targetMonth,
+        paymentsCount: (contract.payments as any[]).length,
+        firstPayment: (contract.payments as any[])[0]
+      });
+
       const payment = (contract.payments as any[]).find(
-        (p: any) => p.targetMonth === targetMonth && p.paymentType === PaymentType.MONTHLY
+        (p: any) => {
+          // ✅ TUZATISH: Strict equality va type checking
+          const monthMatch = Number(p.targetMonth) === Number(targetMonth);
+          const typeMatch = p.paymentType === PaymentType.MONTHLY;
+          
+          logger.debug("Checking payment:", {
+            paymentTargetMonth: p.targetMonth,
+            paymentTargetMonthType: typeof p.targetMonth,
+            targetMonth: targetMonth,
+            targetMonthType: typeof targetMonth,
+            paymentType: p.paymentType,
+            monthMatch,
+            typeMatch,
+            finalMatch: monthMatch && typeMatch
+          });
+          
+          return monthMatch && typeMatch;
+        }
       );
 
+      logger.debug("Payment search result:", { found: !!payment, paymentId: payment?._id });
+
       if (!payment) {
+        // ✅ Debug: Barcha paymentlarni ko'rsatish
+        logger.error("Payment not found. Available payments:", 
+          (contract.payments as any[]).map(p => ({
+            id: p._id,
+            targetMonth: p.targetMonth,
+            paymentType: p.paymentType,
+            isPaid: p.isPaid
+          }))
+        );
         throw BaseError.NotFoundError(
           `${targetMonth}-oy uchun to'lov topilmadi`
         );
@@ -536,11 +571,27 @@ class PaymentService {
         );
       }
 
+      logger.debug("🔍 Searching for payment to remove reminder:", {
+        targetMonth,
+        targetMonthType: typeof targetMonth,
+        paymentsCount: (contract.payments as any[]).length
+      });
+
       const payment = (contract.payments as any[]).find(
-        (p: any) => p.targetMonth === targetMonth && p.paymentType === PaymentType.MONTHLY
+        (p: any) => Number(p.targetMonth) === Number(targetMonth) && p.paymentType === PaymentType.MONTHLY
       );
 
+      logger.debug("Payment found for removal:", { found: !!payment, paymentId: payment?._id });
+
       if (!payment) {
+        logger.error("Payment not found for reminder removal. Available payments:", 
+          (contract.payments as any[]).map(p => ({
+            id: p._id,
+            targetMonth: p.targetMonth,
+            paymentType: p.paymentType,
+            isPaid: p.isPaid
+          }))
+        );
         throw BaseError.NotFoundError(
           `${targetMonth}-oy uchun to'lov topilmadi`
         );
