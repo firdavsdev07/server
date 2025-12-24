@@ -97,6 +97,87 @@ export class PaymentCreatorHelper {
   }
 
   /**
+   * ✅ YANGI: Shartnoma uchun barcha oylik to'lovlarni oldindan yaratish
+   * Bu to'lovlar database'da mavjud bo'ladi, lekin isPaid: false
+   * Reminder belgilash mumkin bo'ladi
+   * 
+   * @param contractId - Shartnoma ID
+   * @param period - Shartnoma muddati (oylar)
+   * @param monthlyPayment - Oylik to'lov miqdori
+   * @param startDate - Shartnoma boshlanish sanasi
+   * @param customerId - Mijoz ID
+   * @param managerId - Manager ID
+   */
+  static async createAllMonthlyPaymentsForContract(data: {
+    contractId: any;
+    period: number;
+    monthlyPayment: number;
+    startDate: Date;
+    customerId: any;
+    managerId: any;
+  }) {
+    const {
+      contractId,
+      period,
+      monthlyPayment,
+      startDate,
+      customerId,
+      managerId,
+    } = data;
+
+    logger.debug("📅 Creating all monthly payments for contract:", {
+      contractId,
+      period,
+      monthlyPayment,
+    });
+
+    const payments = [];
+    const start = new Date(startDate);
+
+    for (let month = 1; month <= period; month++) {
+      // Har bir oy uchun to'lov sanasini hisoblash
+      const paymentDate = new Date(start);
+      paymentDate.setMonth(paymentDate.getMonth() + month);
+
+      // Notes yaratish (default)
+      const notes = await Notes.create({
+        text: `${month}-oy to'lovi (kutilmoqda)`,
+        customer: customerId,
+        createBy: String(managerId),
+      });
+
+      // Payment yaratish - isPaid: false
+      // ✅ MUHIM: status PENDING emas, chunki bu hali to'lov jarayonida emas
+      // Faqat kutilayotgan to'lov (scheduled payment)
+      const payment = await Payment.create({
+        amount: monthlyPayment,
+        actualAmount: 0, // Hali to'lanmagan
+        date: paymentDate, // ✅ MUHIM: Haqiqiy to'lov sanasi (o'zgarmasligi kerak!)
+        isPaid: false,
+        paymentType: PaymentType.MONTHLY,
+        customerId: customerId,
+        managerId: managerId,
+        notes: notes._id,
+        // ✅ TUZATISH: status undefined qolsin (default PENDING bo'ladi schema'da)
+        // Lekin bu "kassa kutilmoqda" emas, balki "hali to'lanmagan"
+        expectedAmount: monthlyPayment,
+        remainingAmount: monthlyPayment, // To'liq summa qolgan
+        excessAmount: 0,
+        targetMonth: month, // ✅ MUHIM: Qaysi oy
+        reminderDate: null, // ✅ Manager belgilashi mumkin
+      });
+
+      payments.push(payment);
+
+      logger.debug(`  ✓ Payment created for month ${month}: ${payment._id}`);
+    }
+
+    logger.debug(`✅ Created ${payments.length} payment(s) for contract ${contractId}`);
+
+    return payments;
+  }
+
+  /**
    * Bir nechta oylik to'lovlar yaratish
    * @param data - To'lovlar ma'lumotlari
    */

@@ -266,6 +266,23 @@ class ContractService {
         user.sub
       );
 
+      // ✅ YANGI: Barcha oylik to'lovlarni oldindan yaratish
+      // Bu reminder qo'yish uchun zarur
+      const { PaymentCreatorHelper } = await import("../../utils/helpers/payment-creator.helper");
+      const allMonthlyPayments = await PaymentCreatorHelper.createAllMonthlyPaymentsForContract({
+        contractId: contract._id,
+        period: period,
+        monthlyPayment: monthlyPayment,
+        startDate: contractStartDate,
+        customerId: customer,
+        managerId: createBy._id,
+      });
+
+      // Contract'ga to'lovlarni qo'shish
+      contract.payments = allMonthlyPayments.map((p) => p._id) as any;
+      await contract.save();
+      logger.debug(`📅 Added ${allMonthlyPayments.length} monthly payments to contract`);
+
       // 5. Create initial payment (if exists) - DELEGATED
       if (initialPayment && initialPayment > 0) {
         await contractPaymentHelper.createInitialPayment(
