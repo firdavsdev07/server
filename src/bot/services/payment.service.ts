@@ -265,27 +265,64 @@ class PaymentService {
       logger.debug(`✅ nextPaymentDate validated: ${nextDate.toISOString()}`);
     }
 
-    const paymentDoc = await Payment.create({
-      amount: expectedMonthlyPayment, // ✅ Kutilgan oylik to'lov (faqat 148$)
-      actualAmount: actualAmount, // ✅ Haqiqatda to'langan summa (296$)
-      date: new Date(),
-      isPaid: false,
-      paymentType: PaymentType.MONTHLY,
-      notes: notes._id,
-      customerId: customer,
-      managerId: manager._id,
-      status: PaymentStatus.PENDING, // PENDING - kassaga tushadi
-      expectedAmount: expectedMonthlyPayment, // Kutilgan oylik to'lov
-      excessAmount: calculatedExcessAmount, // Hisoblangan ortiqcha (148$)
-      remainingAmount: calculatedRemainingAmount, // Hisoblangan kam to'langan
-      targetMonth: payData.targetMonth || calculatedTargetMonth, // ✅ Frontend'dan yoki backend'da hisoblangan
-      nextPaymentDate: payData.nextPaymentDate ? new Date(payData.nextPaymentDate) : undefined, // ✅ YANGI
-    });
+    const finalTargetMonth = payData.targetMonth || calculatedTargetMonth;
 
-    // ✅ MUHIM: PENDING payment'ni contract'ga qo'shamiz (frontend uchun zarur!)
-    // Frontend contract.payments arraydan o'qiyapti, shuning uchun PENDING ham bo'lishi kerak
-    existingContract.payments.push(paymentDoc._id as any);
-    await existingContract.save();
+    // ✅ TUZATILDI: Avval mavjud placeholder payment (eslatma uchun yaratilgan) borligini tekshirish
+    const existingPlaceholder = (existingContract.payments as any[]).find(
+      (p) => Number(p.targetMonth) === Number(finalTargetMonth) &&
+        p.paymentType === PaymentType.MONTHLY &&
+        p.status === null &&  // Placeholder - eslatma uchun yaratilgan
+        !p.isPaid
+    );
+
+    let paymentDoc;
+
+    if (existingPlaceholder) {
+      // ✅ Mavjud placeholder paymentni yangilash (dublikat yaratmaslik uchun)
+      logger.info(`📝 Found existing placeholder payment for month ${finalTargetMonth}, updating it`);
+
+      paymentDoc = await Payment.findByIdAndUpdate(
+        existingPlaceholder._id,
+        {
+          amount: expectedMonthlyPayment,
+          actualAmount: actualAmount,
+          date: new Date(),
+          notes: notes._id,
+          managerId: manager._id,
+          status: PaymentStatus.PENDING, // ✅ Endi PENDING - kassaga tushadi
+          expectedAmount: expectedMonthlyPayment,
+          excessAmount: calculatedExcessAmount,
+          remainingAmount: calculatedRemainingAmount,
+          nextPaymentDate: payData.nextPaymentDate ? new Date(payData.nextPaymentDate) : undefined,
+          // reminderDate saqlanadi - o'chirilmaydi
+        },
+        { new: true }
+      );
+
+      logger.info(`✅ Placeholder payment updated to PENDING: ${paymentDoc?._id}`);
+    } else {
+      // ✅ Yangi payment yaratish (oldingi logika)
+      paymentDoc = await Payment.create({
+        amount: expectedMonthlyPayment,
+        actualAmount: actualAmount,
+        date: new Date(),
+        isPaid: false,
+        paymentType: PaymentType.MONTHLY,
+        notes: notes._id,
+        customerId: customer,
+        managerId: manager._id,
+        status: PaymentStatus.PENDING,
+        expectedAmount: expectedMonthlyPayment,
+        excessAmount: calculatedExcessAmount,
+        remainingAmount: calculatedRemainingAmount,
+        targetMonth: finalTargetMonth,
+        nextPaymentDate: payData.nextPaymentDate ? new Date(payData.nextPaymentDate) : undefined,
+      });
+
+      // ✅ Faqat yangi payment uchun contract'ga qo'shish
+      existingContract.payments.push(paymentDoc._id as any);
+      await existingContract.save();
+    }
 
     logger.info("⏳ Payment created in PENDING status and added to contract.payments");
     logger.info("⏳ Waiting for cash confirmation");
@@ -293,6 +330,11 @@ class PaymentService {
 
     // ❌ Balance yangilanmaydi - faqat kassa tasdiqlanganda
     // ❌ nextPaymentDate yangilanmaydi - faqat kassa tasdiqlanganda
+
+    // ✅ paymentDoc null tekshiruvi
+    if (!paymentDoc) {
+      throw BaseError.InternalServerError("To'lov yaratishda xatolik yuz berdi");
+    }
 
     return {
       status: "success",
