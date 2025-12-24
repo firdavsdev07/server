@@ -9,6 +9,11 @@
 import mongoose from "mongoose";
 import * as migration001 from "./001-add-payment-contract-fields";
 import * as migration002 from "./002-add-payment-indexes";
+import * as migration003 from "./003-add-original-payment-day";
+import * as migration005 from "./005-fix-prepaid-balance";
+import * as migration006 from "./006-create-missing-payments";
+import * as migration007 from "./007-customer-fullname";
+import * as migration008 from "./008-add-reminder-date";
 
 interface Migration {
   name: string;
@@ -26,6 +31,32 @@ const migrations: Migration[] = [
     name: "002-add-payment-indexes",
     up: migration002.up,
     down: migration002.down,
+  },
+  {
+    name: "003-add-original-payment-day",
+    up: migration003.up,
+    down: migration003.down,
+  },
+  // Migration 004 skipped - no exports
+  {
+    name: "005-fix-prepaid-balance",
+    up: migration005.up,
+    down: migration005.down,
+  },
+  {
+    name: "006-create-missing-payments",
+    up: migration006.up,
+    down: migration006.down,
+  },
+  {
+    name: "007-customer-fullname",
+    up: migration007.up,
+    down: migration007.down,
+  },
+  {
+    name: "008-add-reminder-date",
+    up: migration008.up,
+    down: migration008.down,
   },
 ];
 
