@@ -558,6 +558,7 @@ class CustomerService {
                 excessAmount: "$$payment.excessAmount",
                 expectedAmount: "$$payment.expectedAmount",
                 targetMonth: "$$payment.targetMonth",
+                reminderDate: "$$payment.reminderDate", // ✅ YANGI - Eslatma sanasi
               },
             },
           },
@@ -600,46 +601,8 @@ class CustomerService {
       },
     ]);
 
-    logger.debug("📋 All Contracts COUNT:", allContracts.length);
-
-    if (allContracts.length > 0) {
-      const firstContract = allContracts[0];
-      const pendingPayments = firstContract.payments?.filter((p: any) => p.status === 'PENDING') || [];
-
-      logger.debug("📋 First Contract Details:", {
-        _id: firstContract._id,
-        productName: firstContract.productName,
-        totalPayments: firstContract.payments?.length || 0,
-        pendingPaymentsCount: pendingPayments.length,
-        pendingPayments: pendingPayments.map((p: any) => ({
-          _id: p._id,
-          targetMonth: p.targetMonth,
-          status: p.status,
-          isPaid: p.isPaid,
-        })),
-        initialPaymentDueDate: allContracts[0].initialPaymentDueDate,
-        monthlyPayment: allContracts[0].monthlyPayment,
-        period: allContracts[0].period,
-        paidMonthsCount: allContracts[0].paidMonthsCount,
-        durationMonths: allContracts[0].durationMonths,
-        totalDebt: allContracts[0].totalDebt,
-        totalPaid: allContracts[0].totalPaid,
-        remainingDebt: allContracts[0].remainingDebt,
-        paymentsCount: allContracts[0].payments?.length || 0,
-        paymentsIsNull: allContracts[0].payments === null,
-        paymentsIsUndefined: allContracts[0].payments === undefined,
-      });
-
-      logger.debug("📋 Payments Array:", allContracts[0].payments?.map((p: any) => ({
-        _id: p._id,
-        paymentType: p.paymentType,
-        isPaid: p.isPaid,
-        status: p.status,
-        amount: p.amount,
-        targetMonth: p.targetMonth,
-        date: p.date,
-      })));
-    }
+    // ✅ Production uchun minimal logging
+    logger.debug(`📋 Contracts found: ${allContracts.length} for customer: ${customerId}`);
 
     const debtorContractsRaw = await Debtor.aggregate([
       {
@@ -745,6 +708,7 @@ class CustomerService {
                 excessAmount: "$$payment.excessAmount",
                 expectedAmount: "$$payment.expectedAmount",
                 targetMonth: "$$payment.targetMonth",
+                reminderDate: "$$payment.reminderDate", // ✅ YANGI - Eslatma sanasi
               },
             },
           },
@@ -752,18 +716,7 @@ class CustomerService {
       },
     ]);
 
-    logger.debug("📋 Debtor Contracts:", debtorContractsRaw.map(c => ({
-      _id: c._id,
-      productName: c.productName,
-      paidMonthsCount: c.paidMonthsCount,
-      durationMonths: c.durationMonths,
-      paymentsCount: c.payments?.length || 0,
-      payments: c.payments?.map((p: any) => ({
-        paymentType: p.type, // Make sure this is correct
-        isPaid: p.isPaid,
-        amount: p.amount,
-      })),
-    })));
+    logger.debug(`📋 Debtor Contracts: ${debtorContractsRaw.length}`);
 
     // ✅ YANGI: Shartnomalarni tugallanganlik bo'yicha kategoriyalash
     const completedContracts = allContracts.filter((c) => c.isCompleted === true);
@@ -774,45 +727,16 @@ class CustomerService {
       (c) => c.isPaid === false
     );
 
-    logger.debug("✅ FINAL RESPONSE:", {
-      allContractsCount: allContracts.length,
-      activeContractsCount: activeContracts.length,
-      completedContractsCount: completedContracts.length,
-      paidContractsCount: paidContracts.length,
-      debtorContractsCount: debtorContracts.length,
-    });
+    logger.debug(`✅ Response: ${allContracts.length} all, ${paidContracts.length} paid, ${debtorContracts.length} debtor contracts`);
 
-    // ✅ MUHIM TUZATISH: Frontend `allContracts` va `paidContracts` kutadi
-    // Backend esa `activeContracts` va `completedContracts` qaytarmoqda edi
-    // Bu nomuvofiqlik tufayli shartnomalar ko'rinmasdi
     const response = {
       status: "success",
       data: {
-        allContracts: allContracts || [], // ✅ Barcha shartnomalar (active + completed)
-        paidContracts: paidContracts || [], // ✅ To'langan qarzdor shartnomalar
-        debtorContracts: debtorContracts || [], // ✅ To'lanmagan qarzdor shartnomalar
+        allContracts: allContracts || [],
+        paidContracts: paidContracts || [],
+        debtorContracts: debtorContracts || [],
       },
     };
-
-    logger.debug("📤 SENDING RESPONSE:", {
-      hasActiveContracts: !!response.data.allContracts,
-      activeContractsLength: response.data.allContracts.length,
-      hasCompletedContracts: !!response.data.paidContracts,
-      completedContractsLength: response.data.paidContracts.length,
-      firstActiveContract: response.data.allContracts[0] ? {
-        _id: response.data.allContracts[0]._id,
-        paidMonthsCount: response.data.allContracts[0].paidMonthsCount,
-        durationMonths: response.data.allContracts[0].durationMonths,
-        isCompleted: response.data.allContracts[0].isCompleted,
-        paymentsCount: response.data.allContracts[0].payments?.length,
-      } : null,
-      firstCompletedContract: response.data.paidContracts[0] ? {
-        _id: response.data.paidContracts[0]._id,
-        paidMonthsCount: response.data.paidContracts[0].paidMonthsCount,
-        durationMonths: response.data.paidContracts[0].durationMonths,
-        isCompleted: response.data.paidContracts[0].isCompleted,
-      } : null,
-    });
 
     return response;
   }
