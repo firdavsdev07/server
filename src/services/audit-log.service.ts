@@ -459,6 +459,7 @@ class AuditLogService {
     const dateObj = new Date(date.getTime() + 5 * 60 * 60 * 1000); // +5 soat
     const year = dateObj.getUTCFullYear();
     const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+│                                                                                                                      │
     const day = String(dateObj.getUTCDate()).padStart(2, '0');
     const dateString = `${year}-${month}-${day}`;
     const endOfDay = getUzbekistanDayEnd(dateString);

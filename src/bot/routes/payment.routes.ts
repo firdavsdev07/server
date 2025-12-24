@@ -13,4 +13,8 @@ router.post("/pay-remaining", paymentController.payRemaining);
 router.get("/my-pending", paymentController.getMyPendingPayments);
 router.get("/my-pending-stats", paymentController.getMyPendingStats);
 
+// ✅ YANGI: Reminder API
+router.post("/set-reminder", paymentController.setReminder);
+router.post("/remove-reminder", paymentController.removeReminder);
+
 export default router;

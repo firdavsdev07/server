@@ -111,6 +111,81 @@ class PaymentController {
       return next(error);
     }
   }
+
+  /**
+   * ✅ YANGI: To'lov uchun eslatma sanasini belgilash
+   * POST /api/bot/payment/set-reminder
+   * Body: { contractId, targetMonth, reminderDate }
+   */
+  async setReminder(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = req.user;
+
+      if (!user) {
+        return res.status(401).json({
+          status: "error",
+          message: "Autentifikatsiya qilinmagan",
+        });
+      }
+
+      const { contractId, targetMonth, reminderDate } = req.body;
+
+      if (!contractId || !targetMonth || !reminderDate) {
+        return res.status(400).json({
+          status: "error",
+          message: "contractId, targetMonth va reminderDate majburiy",
+        });
+      }
+
+      const result = await paymentService.setPaymentReminder(
+        contractId,
+        targetMonth,
+        reminderDate,
+        user
+      );
+      
+      res.status(200).json(result);
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+  /**
+   * ✅ YANGI: To'lov eslatmasini o'chirish
+   * POST /api/bot/payment/remove-reminder
+   * Body: { contractId, targetMonth }
+   */
+  async removeReminder(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = req.user;
+
+      if (!user) {
+        return res.status(401).json({
+          status: "error",
+          message: "Autentifikatsiya qilinmagan",
+        });
+      }
+
+      const { contractId, targetMonth } = req.body;
+
+      if (!contractId || !targetMonth) {
+        return res.status(400).json({
+          status: "error",
+          message: "contractId va targetMonth majburiy",
+        });
+      }
+
+      const result = await paymentService.removePaymentReminder(
+        contractId,
+        targetMonth,
+        user
+      );
+      
+      res.status(200).json(result);
+    } catch (error) {
+      return next(error);
+    }
+  }
 }
 
 export default new PaymentController();

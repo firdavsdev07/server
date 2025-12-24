@@ -423,6 +423,134 @@ class PaymentService {
       throw BaseError.InternalServerError("Statistikani olishda xatolik");
     }
   }
+
+  /**
+   * ✅ YANGI: To'lov uchun eslatma sanasini belgilash
+   * Manager o'zi uchun reminder sifatida kun belgilaydi
+   * Bu payment date'ni o'zgartirmaydi, faqat manager uchun eslatma
+   */
+  async setPaymentReminder(
+    contractId: string,
+    targetMonth: number,
+    reminderDate: string,
+    user: IJwtUser
+  ) {
+    try {
+      logger.debug("🔔 === SETTING PAYMENT REMINDER ===");
+      logger.debug("Contract ID:", contractId);
+      logger.debug("Target Month:", targetMonth);
+      logger.debug("Reminder Date:", reminderDate);
+
+      // Contract'ni topish va payments'ni populate qilish
+      const contract = await Contract.findById(contractId).populate("payments");
+
+      if (!contract) {
+        throw BaseError.NotFoundError("Shartnoma topilmadi");
+      }
+
+      // Manager faqat o'z shartnomasiga reminder qo'yishi mumkin
+      const contractManagerId = (contract as any).managerId?.toString();
+      if (contractManagerId !== user.sub) {
+        throw BaseError.ForbiddenError(
+          "Siz faqat o'z shartnomalaringizga reminder qo'yishingiz mumkin"
+        );
+      }
+
+      // Target month uchun payment topish
+      const payment = (contract.payments as any[]).find(
+        (p: any) => p.targetMonth === targetMonth && p.paymentType === PaymentType.MONTHLY
+      );
+
+      if (!payment) {
+        throw BaseError.NotFoundError(
+          `${targetMonth}-oy uchun to'lov topilmadi`
+        );
+      }
+
+      // Agar to'lov allaqachon to'langan bo'lsa, reminder qo'yish mumkin emas
+      if (payment.isPaid) {
+        throw BaseError.BadRequest("To'langan to'lovga reminder qo'yib bo'lmaydi");
+      }
+
+      // Reminder date validation
+      const reminder = new Date(reminderDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      reminder.setHours(0, 0, 0, 0);
+
+      if (reminder < today) {
+        throw BaseError.BadRequest("Eslatma sanasi bugundan oldingi kun bo'lmasligi kerak");
+      }
+
+      // Payment'ni yangilash
+      const paymentId = (payment as any)._id;
+      await Payment.findByIdAndUpdate(paymentId, {
+        reminderDate: reminder,
+      });
+
+      logger.info(`✅ Reminder set for payment ${paymentId} to ${reminderDate}`);
+
+      return {
+        status: "success",
+        message: "Eslatma muvaffaqiyatli belgilandi",
+        reminderDate: reminder,
+      };
+    } catch (error) {
+      logger.error("❌ Error setting payment reminder:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * ✅ YANGI: To'lov eslatmasini o'chirish
+   */
+  async removePaymentReminder(
+    contractId: string,
+    targetMonth: number,
+    user: IJwtUser
+  ) {
+    try {
+      logger.debug("🔕 === REMOVING PAYMENT REMINDER ===");
+
+      const contract = await Contract.findById(contractId).populate("payments");
+
+      if (!contract) {
+        throw BaseError.NotFoundError("Shartnoma topilmadi");
+      }
+
+      const contractManagerId = (contract as any).managerId?.toString();
+      if (contractManagerId !== user.sub) {
+        throw BaseError.ForbiddenError(
+          "Siz faqat o'z shartnomalaringizdan reminder o'chirishingiz mumkin"
+        );
+      }
+
+      const payment = (contract.payments as any[]).find(
+        (p: any) => p.targetMonth === targetMonth && p.paymentType === PaymentType.MONTHLY
+      );
+
+      if (!payment) {
+        throw BaseError.NotFoundError(
+          `${targetMonth}-oy uchun to'lov topilmadi`
+        );
+      }
+
+      const paymentId = (payment as any)._id;
+      await Payment.findByIdAndUpdate(paymentId, {
+        $unset: { reminderDate: 1 },
+      });
+
+      logger.info(`✅ Reminder removed for payment ${paymentId}`);
+
+      return {
+        status: "success",
+        message: "Eslatma o'chirildi",
+      };
+    } catch (error) {
+      logger.error("❌ Error removing payment reminder:", error);
+      throw error;
+    }
+  }
 }
 
 export default new PaymentService();
