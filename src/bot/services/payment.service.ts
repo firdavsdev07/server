@@ -442,17 +442,22 @@ class PaymentService {
       logger.debug("Reminder Date:", reminderDate);
 
       // Contract'ni topish va payments'ni populate qilish
-      const contract = await Contract.findById(contractId).populate("payments");
+      const contract = await Contract.findById(contractId)
+        .populate("payments")
+        .populate("customer");
 
       if (!contract) {
         throw BaseError.NotFoundError("Shartnoma topilmadi");
       }
 
-      // Manager faqat o'z shartnomasiga reminder qo'yishi mumkin
-      const contractManagerId = (contract as any).managerId?.toString();
+      // Manager faqat o'z mijozining shartnomasiga reminder qo'yishi mumkin
+      const customer = contract.customer as any;
+      const contractManagerId = customer?.manager?.toString();
+      
       if (contractManagerId !== user.sub) {
+        logger.warn(`403 Forbidden: Contract manager (${contractManagerId}) !== User (${user.sub})`);
         throw BaseError.ForbiddenError(
-          "Siz faqat o'z shartnomalaringizga reminder qo'yishingiz mumkin"
+          "Siz faqat o'z mijozlaringizning shartnomalariga reminder qo'yishingiz mumkin"
         );
       }
 
@@ -512,16 +517,22 @@ class PaymentService {
     try {
       logger.debug("🔕 === REMOVING PAYMENT REMINDER ===");
 
-      const contract = await Contract.findById(contractId).populate("payments");
+      const contract = await Contract.findById(contractId)
+        .populate("payments")
+        .populate("customer");
 
       if (!contract) {
         throw BaseError.NotFoundError("Shartnoma topilmadi");
       }
 
-      const contractManagerId = (contract as any).managerId?.toString();
+      // Manager faqat o'z mijozining shartnomasidan reminder o'chirishi mumkin
+      const customer = contract.customer as any;
+      const contractManagerId = customer?.manager?.toString();
+      
       if (contractManagerId !== user.sub) {
+        logger.warn(`403 Forbidden: Contract manager (${contractManagerId}) !== User (${user.sub})`);
         throw BaseError.ForbiddenError(
-          "Siz faqat o'z shartnomalaringizdan reminder o'chirishingiz mumkin"
+          "Siz faqat o'z mijozlaringizning shartnomalaridan reminder o'chirishingiz mumkin"
         );
       }
 
