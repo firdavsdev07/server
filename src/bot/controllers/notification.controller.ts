@@ -3,9 +3,7 @@ import notificationService from "../services/notification.service";
 import BaseError from "../../utils/base.error";
 
 class NotificationController {
-  /**
-   * Get all notifications for current manager
-   */
+
   async getNotifications(req: Request, res: Response, next: NextFunction) {
     try {
       const managerId = req.user?.sub;
@@ -30,9 +28,7 @@ class NotificationController {
     }
   }
 
-  /**
-   * Get unread notification count
-   */
+
   async getUnreadCount(req: Request, res: Response, next: NextFunction) {
     try {
       const managerId = req.user?.sub;

@@ -22,12 +22,10 @@ export const updatePaymentDate = async (req: Request, res: Response) => {
             });
         }
 
-        // Eski sanani saqlab qolish
         if (contract.nextPaymentDate) {
             contract.previousPaymentDate = contract.nextPaymentDate;
         }
 
-        // Yangi sanani o'rnatish
         contract.nextPaymentDate = new Date(newPaymentDate);
 
         await contract.save();

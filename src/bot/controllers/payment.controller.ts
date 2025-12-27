@@ -59,19 +59,11 @@ class PaymentController {
     return dashboardPaymentController.payAllRemainingMonths(req, res, next);
   }
 
-  /**
-   * ✅ YANGI: Qolgan qarzni to'lash
-   * Bot'dan qolgan qarzni to'lash uchun
-   * Dashboard payRemaining controller'idan foydalaniladi
-   */
   async payRemaining(req: Request, res: Response, next: NextFunction) {
     return dashboardPaymentController.payRemaining(req, res, next);
   }
 
-  /**
-   * Manager'ning PENDING to'lovlarini olish
-   * GET /api/bot/payment/my-pending
-   */
+
   async getMyPendingPayments(req: Request, res: Response, next: NextFunction) {
     try {
       const user = req.user;
@@ -90,10 +82,7 @@ class PaymentController {
     }
   }
 
-  /**
-   * PENDING to'lovlar statistikasi
-   * GET /api/bot/payment/my-pending-stats
-   */
+
   async getMyPendingStats(req: Request, res: Response, next: NextFunction) {
     try {
       const user = req.user;
@@ -112,11 +101,7 @@ class PaymentController {
     }
   }
 
-  /**
-   * ✅ YANGI: To'lov uchun eslatma sanasini belgilash
-   * POST /api/bot/payment/set-reminder
-   * Body: { contractId, targetMonth, reminderDate }
-   */
+
   async setReminder(req: Request, res: Response, next: NextFunction) {
     try {
       const user = req.user;
@@ -130,13 +115,7 @@ class PaymentController {
 
       const { contractId, targetMonth, reminderDate } = req.body;
 
-      logger.debug("🔔 Set reminder request:", {
-        contractId,
-        targetMonth,
-        targetMonthType: typeof targetMonth,
-        reminderDate,
-        userId: user.sub
-      });
+    
 
       if (!contractId || !targetMonth || !reminderDate) {
         return res.status(400).json({
@@ -145,9 +124,8 @@ class PaymentController {
         });
       }
 
-      // ✅ TUZATISH: targetMonth'ni number'ga aylantirish (frontend'dan string kelishi mumkin)
       const targetMonthNumber = Number(targetMonth);
-      
+
       if (isNaN(targetMonthNumber) || targetMonthNumber < 1) {
         return res.status(400).json({
           status: "error",
@@ -161,18 +139,14 @@ class PaymentController {
         reminderDate,
         user
       );
-      
+
       res.status(200).json(result);
     } catch (error) {
       return next(error);
     }
   }
 
-  /**
-   * ✅ YANGI: To'lov eslatmasini o'chirish
-   * POST /api/bot/payment/remove-reminder
-   * Body: { contractId, targetMonth }
-   */
+
   async removeReminder(req: Request, res: Response, next: NextFunction) {
     try {
       const user = req.user;
@@ -186,12 +160,6 @@ class PaymentController {
 
       const { contractId, targetMonth } = req.body;
 
-      logger.debug("🔕 Remove reminder request:", {
-        contractId,
-        targetMonth,
-        targetMonthType: typeof targetMonth,
-        userId: user.sub
-      });
 
       if (!contractId || !targetMonth) {
         return res.status(400).json({
@@ -200,9 +168,8 @@ class PaymentController {
         });
       }
 
-      // ✅ TUZATISH: targetMonth'ni number'ga aylantirish
       const targetMonthNumber = Number(targetMonth);
-      
+
       if (isNaN(targetMonthNumber) || targetMonthNumber < 1) {
         return res.status(400).json({
           status: "error",
@@ -215,7 +182,7 @@ class PaymentController {
         targetMonthNumber,
         user
       );
-      
+
       res.status(200).json(result);
     } catch (error) {
       return next(error);

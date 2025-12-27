@@ -19,32 +19,27 @@ class AuthController {
   // Check if user is registered (has phone number)
   async checkRegistration(req: Request, res: Response, next: NextFunction) {
     try {
-      logger.debug("🔍 === CHECK REGISTRATION REQUEST ===");
-      
       const { initData } = req.body;
-      
+
       if (!initData) {
         return next(BaseError.BadRequest("initData topilmadi"));
       }
-      
+
       const telegramId = checkTelegramInitData(initData);
-      
+
       if (!telegramId) {
         return next(BaseError.UnauthorizedError("initData noto'g'ri"));
       }
-      
-      logger.debug("🔍 TelegramId:", telegramId, "uchun registration check");
-      
+
       const employee = await Employee.findOne({
         telegramId: telegramId.toString(),
         isActive: true,
         isDeleted: false,
       }).populate("role");
-      
+
       const isRegistered = !!employee;
-      logger.debug(`📊 Registration status: ${isRegistered ? 'REGISTERED ✅' : 'NOT REGISTERED ❌'}`);
-      
-      res.json({ 
+
+      res.json({
         isRegistered,
         telegramId: telegramId.toString(),
         ...(employee && {
@@ -52,41 +47,30 @@ class AuthController {
             id: employee.id,
             firstName: employee.firstName,
             lastName: employee.lastName,
-            role: employee.role?.name
-          }
-        })
+            role: employee.role?.name,
+          },
+        }),
       });
     } catch (err) {
-      logger.error("❌ Check registration error:", err);
       return next(err);
     }
   }
 
   async telegram(req: Request, res: Response, next: NextFunction) {
     try {
-      logger.debug("🔐 === BOT AUTH REQUEST ===");
-      logger.debug(
-        "📍 Request body:",
-        JSON.stringify(req.body).substring(0, 100)
-      );
+      logger.debug("Request body:", JSON.stringify(req.body).substring(0, 100));
 
       const { initData } = req.body;
 
       if (!initData) {
-        logger.debug("❌ initData mavjud emas");
         return next(BaseError.ForbiddenError("initData topilmadi"));
       }
 
-      logger.debug("✅ initData mavjud, uzunligi:", initData.length);
       const telegramId = checkTelegramInitData(initData);
 
       if (!telegramId) {
-        logger.debug("❌ telegramId parse qilinmadi:", telegramId);
         return next(BaseError.UnauthorizedError("initData noto'g'ri"));
       }
-
-      logger.debug("✅ telegramId topildi:", telegramId);
-      logger.debug("🔍 Database'dan xodim qidirilmoqda...");
 
       const employee = await Employee.findOne({
         telegramId: telegramId.toString(),
@@ -95,13 +79,8 @@ class AuthController {
       }).populate("role");
 
       if (!employee) {
-        logger.debug("❌ Xodim topilmadi. TelegramId:", telegramId);
-        logger.debug("💡 Iltimos, avval telefon raqamingizni bot'ga yuboring");
         return next(BaseError.NotFoundError("Foydalanuvchi topilmadi"));
       }
-
-      logger.debug("✅ Xodim topildi:", employee.firstName, employee.lastName);
-      logger.debug("👤 Rol:", employee.role?.name);
 
       const employeeData: IEmployeeData = {
         id: employee.id,
@@ -119,12 +98,9 @@ class AuthController {
       };
 
       const accessToken = jwt.signBot(employeeDto);
-      logger.debug("✅ Token yaratildi");
-      logger.debug("🎉 === AUTH SUCCESSFUL ===\n");
 
       res.json({ profile: employeeData, token: accessToken });
     } catch (err) {
-      logger.error("❌ Telegram auth error:", err);
       return next(err);
     }
   }

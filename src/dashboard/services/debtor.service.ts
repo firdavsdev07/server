@@ -12,6 +12,9 @@ class DebtorService {
    */
   async getDebtors() {
     try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
       const debtors = await Contract.aggregate([
         {
           $match: {
@@ -53,7 +56,7 @@ class DebtorService {
         },
         {
           $addFields: {
-            totalPaid: {
+            contractTotalPaid: {
               $sum: {
                 $map: {
                   input: {
@@ -68,12 +71,24 @@ class DebtorService {
                 },
               },
             },
+            delayDays: {
+              $max: [
+                0,
+                {
+                  $dateDiff: {
+                    startDate: "$nextPaymentDate",
+                    endDate: today,
+                    unit: "day",
+                  },
+                },
+              ],
+            },
           },
         },
         {
           $addFields: {
-            remainingDebt: {
-              $subtract: ["$totalPrice", "$totalPaid"],
+            contractRemainingDebt: {
+              $subtract: ["$totalPrice", "$contractTotalPaid"],
             },
           },
         },
@@ -86,10 +101,26 @@ class DebtorService {
             managerLastName: { $first: "$manager.lastName" },
             activeContractsCount: { $sum: 1 },
             totalPrice: { $sum: "$totalPrice" },
-            totalPaid: { $sum: "$totalPaid" },
-            remainingDebt: { $sum: "$remainingDebt" },
+            totalPaid: { $sum: "$contractTotalPaid" },
+            remainingDebt: { $sum: "$contractRemainingDebt" },
             nextPaymentDate: { $min: "$nextPaymentDate" },
             createdAt: { $first: "$createdAt" },
+            // Shartnomalar ro'yxati
+            contracts: {
+              $push: {
+                _id: "$_id",
+                productName: "$productName",
+                totalPrice: "$totalPrice",
+                totalPaid: "$contractTotalPaid",
+                remainingDebt: "$contractRemainingDebt",
+                period: "$period",
+                monthlyPayment: "$monthlyPayment",
+                initialPayment: "$initialPayment",
+                startDate: "$startDate",
+                nextPaymentDate: "$nextPaymentDate",
+                delayDays: "$delayDays",
+              },
+            },
           },
         },
         {
@@ -109,6 +140,7 @@ class DebtorService {
             remainingDebt: 1,
             nextPaymentDate: 1,
             activeContractsCount: 1,
+            contracts: 1,
             createdAt: 1,
           },
         },
@@ -303,6 +335,8 @@ class DebtorService {
             startDate: 1,
             delayDays: 1,
             initialPayment: 1,
+            monthlyPayment: 1,
+            period: 1,
             createdAt: 1
           },
         },
