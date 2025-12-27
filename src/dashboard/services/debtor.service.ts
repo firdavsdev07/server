@@ -93,6 +93,24 @@ class DebtorService {
           },
         },
         {
+          $addFields: {
+            paidMonthsCount: {
+              $size: {
+                $filter: {
+                  input: "$paymentDetails",
+                  as: "p",
+                  cond: {
+                    $and: [
+                      { $eq: ["$$p.isPaid", true] },
+                      { $eq: ["$$p.paymentType", "monthly"] }
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        },
+        {
           $group: {
             _id: "$customer._id",
             fullName: { $first: "$customer.fullName" },
@@ -119,6 +137,7 @@ class DebtorService {
                 startDate: "$startDate",
                 nextPaymentDate: "$nextPaymentDate",
                 delayDays: "$delayDays",
+                paidMonthsCount: "$paidMonthsCount",
               },
             },
           },
@@ -306,6 +325,20 @@ class DebtorService {
                 },
               },
             },
+            paidMonthsCount: {
+              $size: {
+                $filter: {
+                  input: "$paymentDetails",
+                  as: "p",
+                  cond: {
+                    $and: [
+                      { $eq: ["$$p.isPaid", true] },
+                      { $eq: ["$$p.paymentType", "monthly"] }
+                    ],
+                  },
+                },
+              },
+            },
           }
         },
         // 7. Rest of pipeline
@@ -337,6 +370,7 @@ class DebtorService {
             initialPayment: 1,
             monthlyPayment: 1,
             period: 1,
+            paidMonthsCount: 1,
             createdAt: 1
           },
         },

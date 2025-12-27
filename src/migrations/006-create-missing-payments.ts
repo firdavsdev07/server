@@ -42,10 +42,7 @@ export async function up() {
         continue;
       }
 
-      logger.info(
-        `📄 Contract ${contract._id}: ${actualMonthlyPayments}/${expectedMonthlyPayments} payments`
-      );
-
+ 
       // Qolgan to'lovlarni yaratish
       const missingPaymentsCount = expectedMonthlyPayments - actualMonthlyPayments;
       const startDate = new Date(contract.startDate);
@@ -101,34 +98,26 @@ export async function up() {
       await contract.save();
       contractsFixed++;
 
-      logger.info(
-        `✅ Contract ${contract._id}: Created ${missingPaymentsCount} missing payments`
-      );
+      
     }
 
-    logger.info(`🎉 Migration completed successfully!`);
-    logger.info(`  - Contracts fixed: ${contractsFixed}`);
-    logger.info(`  - Total payments created: ${totalCreated}`);
   } catch (error) {
-    logger.error("❌ Migration failed:", error);
+    logger.error(" Migration failed:", error);
     throw error;
   }
 }
 
 export async function down() {
   try {
-    logger.info("🔄 === ROLLING BACK MIGRATION 006 ===");
     
-    // To'lovlarni o'chirish (migration tomonidan yaratilganlarni)
     const result = await Payment.deleteMany({
       isPaid: false,
       status: PaymentStatus.PENDING,
       actualAmount: 0,
     });
 
-    logger.info(`✅ Rollback completed. Deleted ${result.deletedCount} payments`);
   } catch (error) {
-    logger.error("❌ Rollback failed:", error);
+    logger.error(" Rollback failed:", error);
     throw error;
   }
 }
