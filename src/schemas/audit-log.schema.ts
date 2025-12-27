@@ -42,6 +42,8 @@ export interface IAuditMetadata {
   actualAmount?: number; // To'langan summa
   remainingAmount?: number; // Qolgan summa
   targetMonth?: number;
+  paymentCreatorId?: string; // ✅ YANGI: Pulni yig'ib to'lovni qilgan odam (managerId)
+  paymentCreatorName?: string; // ✅ YANGI: Pulni yig'ib to'lovni qilgan odam ismi
   
   // Contract uchun
   contractStatus?: string;
@@ -142,6 +144,8 @@ const AuditLogSchema = new Schema<IAuditLog>(
       actualAmount: Number, // To'langan summa
       remainingAmount: Number, // Qolgan summa
       targetMonth: Number,
+      paymentCreatorId: String, // ✅ YANGI: Pulni yig'ib to'lovni qilgan odam (managerId)
+      paymentCreatorName: String, // ✅ YANGI: Pulni yig'ib to'lovni qilgan odam ismi
       
       // Contract  
       contractStatus: String,

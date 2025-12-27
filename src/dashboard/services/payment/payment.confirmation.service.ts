@@ -203,9 +203,16 @@ export class PaymentConfirmationService extends PaymentBaseService {
       await contract.save();
       logger.debug("💾 Contract saved with updated nextPaymentDate");
 
-      // Audit log yaratish - customerName bilan
+      // Audit log yaratish - customerName va paymentCreator bilan
       const customer = await Customer.findById(payment.customerId);
       const customerName = customer?.fullName || "Noma'lum mijoz";
+      
+      // ✅ YANGI: Pulni yig'ib to'lovni qilgan odamni olish (managerId)
+      await payment.populate('managerId');
+      const paymentCreator = payment.managerId as any;
+      const paymentCreatorName = paymentCreator 
+        ? `${paymentCreator.firstName || ''} ${paymentCreator.lastName || ''}`.trim() 
+        : "Noma'lum";
 
       await this.createAuditLog({
         action: (await import("../../../schemas/audit-log.schema")).AuditAction.CONFIRM,
@@ -224,6 +231,8 @@ export class PaymentConfirmationService extends PaymentBaseService {
           paymentStatus: payment.status,
           amount: payment.actualAmount || payment.amount,
           targetMonth: payment.targetMonth,
+          paymentCreatorId: paymentCreator?._id?.toString(), // ✅ YANGI: To'lov qilgan odam ID
+          paymentCreatorName, // ✅ YANGI: To'lov qilgan odam ismi
         }
       });
 
