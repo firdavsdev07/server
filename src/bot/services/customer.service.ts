@@ -123,7 +123,7 @@ class CustomerService {
           }
         },
         
-        // 6️⃣ To'langan summani hisoblash
+        // 6️⃣ To'langan summani va to'langan oylarni hisoblash
         {
           $addFields: {
             totalPaid: {
@@ -140,7 +140,21 @@ class CustomerService {
                   in: { $ifNull: ["$$pp.actualAmount", "$$pp.amount"] },
                 },
               },
-            }
+            },
+            paidMonthsCount: {
+              $size: {
+                $filter: {
+                  input: "$paymentDetails",
+                  as: "p",
+                  cond: {
+                    $and: [
+                      { $eq: ["$$p.isPaid", true] },
+                      { $eq: ["$$p.paymentType", "monthly"] }
+                    ],
+                  },
+                },
+              },
+            },
           },
         },
         
@@ -185,6 +199,8 @@ class CustomerService {
             totalPrice: { $ifNull: ["$totalPrice", "$price"] },
             totalPaid: "$totalPaid",
             startDate: "$startDate", // ✅ KUN uchun kerak!
+            period: "$period", // ✅ YANGI: Shartnoma muddati (9 oy)
+            paidMonthsCount: "$paidMonthsCount", // ✅ YANGI: To'langan oylar (2 oy)
           },
         },
         
