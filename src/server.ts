@@ -101,30 +101,58 @@ const startApplication = async () => {
     logger.debug(`   - ENABLE_BOT: ${enableBot || "not set"}`);
 
     const shouldStartBot = hasToken && enableBot !== "false";
+    const isProduction = process.env.NODE_ENV === "production";
+    const isValidWebhookUrl = botHostUrl && botHostUrl.startsWith("https://");
 
-    if (shouldStartBot && botHostUrl) {
-      logger.debug("Setting up Telegram webhook...");
-      try {
-        await bot.telegram.deleteWebhook({ drop_pending_updates: true });
+    if (shouldStartBot) {
+      if (isValidWebhookUrl) {
+        // Production: Use webhook
+        logger.debug("Setting up Telegram webhook...");
+        try {
+          await bot.telegram.deleteWebhook({ drop_pending_updates: true });
 
-        // Set new webhook
-        const webhookUrl = `${botHostUrl}/telegram-webhook`;
-        await bot.telegram.setWebhook(webhookUrl, {
-          drop_pending_updates: true,
-        });
+          const webhookUrl = `${botHostUrl}/telegram-webhook`;
+          await bot.telegram.setWebhook(webhookUrl, {
+            drop_pending_updates: true,
+          });
 
-        const webhookInfo = await bot.telegram.getWebhookInfo();
-        logger.debug(
-          `Webhook status: ${webhookInfo.url ? "Active" : "Inactive"}`
-        );
-      } catch (botError: any) {
-        logger.error("ebhook setup failed:", botError.message);
+          const webhookInfo = await bot.telegram.getWebhookInfo();
+          logger.debug(
+            `Webhook status: ${webhookInfo.url ? "Active" : "Inactive"}`
+          );
+          logger.debug(`Webhook URL: ${webhookInfo.url}`);
+        } catch (botError: any) {
+          logger.error("Webhook setup failed:", botError.message);
+        }
+      } else {
+        // Development: Use long polling
+        logger.debug("Starting bot in polling mode (development)...");
+        try {
+          await bot.telegram.deleteWebhook({ drop_pending_updates: true });
+
+          // Start polling in background
+          bot.launch({
+            dropPendingUpdates: true,
+          }).then(() => {
+            logger.debug("🤖 Bot started successfully in polling mode");
+          }).catch((err) => {
+            logger.error("Bot polling failed:", err.message);
+          });
+
+          // Graceful stop
+          process.once("SIGINT", () => bot.stop("SIGINT"));
+          process.once("SIGTERM", () => bot.stop("SIGTERM"));
+
+          logger.debug("🤖 Bot polling mode initialized");
+        } catch (botError: any) {
+          logger.error("Bot polling setup failed:", botError.message);
+        }
       }
     } else if (hasToken && enableBot === "false") {
       logger.debug("Bot disabled by ENABLE_BOT=false");
     } else {
       logger.debug(
-        "Bot token or BOT_HOST_URL not found, skipping bot initialization"
+        "Bot token not found, skipping bot initialization"
       );
     }
   } catch (err) {

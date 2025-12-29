@@ -8,8 +8,8 @@ import { MyContext } from "../../utils/context";
 const phoneScene = new Scenes.BaseScene<MyContext>("phone");
 
 phoneScene.enter(async (ctx) => {
+  console.log("📱 Phone scene entered!");
   try {
-
 
     await ctx.reply(
       "Assalomu alaykum!\n\n" +
@@ -21,8 +21,10 @@ phoneScene.enter(async (ctx) => {
         .oneTime()
     );
 
+    console.log("✅ Telefon raqam so'rash xabari yuborildi");
     logger.debug(" Telefon raqam so'rash xabari yuborildi");
   } catch (err: any) {
+    console.error("❌ Phone scene enter error:", err.message);
     logger.debug(" Phone scene enter error:", err.message);
   }
 });

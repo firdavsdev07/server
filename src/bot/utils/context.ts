@@ -1,7 +1,11 @@
-import { Scenes } from "telegraf";
+import { Context, Scenes } from "telegraf";
 
-export interface MySession extends Scenes.WizardSessionData {
+export interface MySession extends Scenes.SceneSession<Scenes.SceneSessionData> {
   phone?: string;
 }
 
-export interface MyContext extends Scenes.WizardContext<MySession> {}
+export interface MyContext extends Context {
+  session: MySession;
+  scene: Scenes.SceneContextScene<MyContext>;
+}
+
