@@ -56,6 +56,10 @@ export interface IAuditMetadata {
   expensesNotes?: string;
   managerName?: string;
   
+  // Employee info (kim bajargan)
+  employeeName?: string;
+  employeeRole?: string;
+  
   // General
   affectedEntities?: {
     entityType: string;
@@ -157,6 +161,10 @@ const AuditLogSchema = new Schema<IAuditLog>(
       sum: Number,
       expensesNotes: String,
       managerName: String,
+      
+      // Employee info
+      employeeName: String,
+      employeeRole: String,
       
       // Mijoz ismi
       customerName: String,

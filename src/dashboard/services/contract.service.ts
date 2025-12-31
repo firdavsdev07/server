@@ -484,31 +484,62 @@ class ContractService {
         logger.debug("⚠️ Super Admin active shartnomani o'chirmoqda");
       }
 
-      // 3. Import cascade delete handler
+      // 3. Calculate total paid amount to revert from balance
+      const Payment = (await import("../../schemas/payment.schema")).default;
+      const paidPayments = await Payment.find({
+        _id: { $in: contract.payments },
+        isPaid: true,
+      });
+
+      let totalPaidAmount = 0;
+      for (const payment of paidPayments) {
+        totalPaidAmount += payment.actualAmount || payment.amount || 0;
+      }
+
+      logger.debug(`💰 Total paid amount to revert: $${totalPaidAmount}`);
+
+      // 4. Import cascade delete handler
       const { cascadeDeleteContract } = await import("../../middlewares/cascade.middleware");
       
-      // 4. Execute cascade delete (will handle payments and debtors)
+      // 5. Execute cascade delete (will handle payments and debtors)
       await cascadeDeleteContract(contractId);
 
-      // 5. Soft delete contract
+      // 6. Revert balance - ayirish
+      if (totalPaidAmount > 0) {
+        const managerId = (contract.createBy as any)?._id || contract.createBy || user.sub;
+        await contractBalanceHelper.revertBalance(managerId, {
+          dollar: totalPaidAmount,
+          sum: 0,
+        });
+        logger.debug(`✅ Balance reverted: -$${totalPaidAmount} from manager ${managerId}`);
+      }
+
+      // 7. Soft delete contract
       contract.isDeleted = true;
       contract.deletedAt = new Date();
       await contract.save();
 
-      // 6. Audit log
+      // 8. Audit log with employee info
       const customerData = contract.customer as any;
+      const employee = await Employee.findById(user.sub).populate("role");
+      const employeeName = employee ? `${employee.firstName} ${employee.lastName}` : "Unknown";
+      const employeeRole = (employee?.role as any)?.name || "unknown";
+      
       await auditLogService.logContractDelete(
         contractId,
         customerData._id.toString(),
         customerData.fullName,
         contract.productName,
-        user.sub
+        user.sub,
+        employeeName,
+        employeeRole
       );
 
       logger.debug("🎉 === CONTRACT DELETE COMPLETED ===");
       return {
         message: "Shartnoma muvaffaqiyatli o'chirildi",
         contractId: contract._id,
+        revertedAmount: totalPaidAmount,
       };
     } catch (error) {
       logger.error("❌ === CONTRACT DELETE FAILED ===");

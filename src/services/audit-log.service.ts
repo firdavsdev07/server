@@ -415,7 +415,9 @@ class AuditLogService {
     customerId: string,
     customerName: string,
     productName: string,
-    userId: string
+    userId: string,
+    employeeName?: string,
+    employeeRole?: string
   ): Promise<void> {
     await this.createLog({
       action: AuditAction.DELETE,
@@ -423,6 +425,8 @@ class AuditLogService {
       entityId: contractId,
       userId,
       metadata: {
+        employeeName,
+        employeeRole,
         affectedEntities: [
           {
             entityType: "contract",
@@ -433,6 +437,11 @@ class AuditLogService {
             entityType: "customer",
             entityId: customerId,
             entityName: customerName,
+          },
+          {
+            entityType: "employee",
+            entityId: userId,
+            entityName: employeeName || "Unknown Employee",
           },
         ],
       },
