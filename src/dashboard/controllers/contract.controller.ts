@@ -188,6 +188,34 @@ class ContractController {
       return next(error);
     }
   }
+
+  /**
+   * O'chirish - shartnomani o'chirish (soft delete)
+   */
+  async deleteContract(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      const user = req.user;
+
+      if (!user) {
+        return next(
+          BaseError.UnauthorizedError(
+            "Foydalanuvchi autentifikatsiya qilinmagan"
+          )
+        );
+      }
+
+      const result = await contractService.deleteContract(id, user);
+
+      res.status(200).json({
+        success: true,
+        message: result.message,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      return next(error);
+    }
+  }
 }
 
 export default new ContractController();

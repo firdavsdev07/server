@@ -59,4 +59,10 @@ router.post(
   contractController.analyzeImpact
 );
 
+router.delete(
+  "/delete/:id",
+  checkPermission(Permission.DELETE_CONTRACT),
+  contractController.deleteContract
+);
+
 export default router;

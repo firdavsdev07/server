@@ -450,6 +450,71 @@ class ContractService {
       throw error;
     }
   }
+
+  /**
+   * Delete contract (soft delete with cascade)
+   * Requirements: DELETE_CONTRACT permission
+   */
+  async deleteContract(contractId: string, user: IJwtUser) {
+    try {
+      logger.debug("🗑️ === CONTRACT DELETE STARTED ===");
+      logger.debug(`Contract ID: ${contractId}`);
+
+      // 1. Find contract
+      const contract = await Contract.findById(contractId).populate("customer");
+      if (!contract) {
+        throw BaseError.NotFoundError("Shartnoma topilmadi");
+      }
+
+      // 2. Check if contract is active (only Super Admin can delete active contracts)
+      if (contract.status === ContractStatus.ACTIVE) {
+        // Check if user is Super Admin
+        const employee = await Employee.findById(user.sub).populate("role");
+        const roleName = (employee?.role as any)?.name;
+        const isSuperAdmin = roleName === "admin";
+
+        logger.debug(`👤 User role: ${roleName}, isSuperAdmin: ${isSuperAdmin}`);
+
+        if (!isSuperAdmin) {
+          throw BaseError.BadRequest(
+            "Aktiv shartnomani o'chirish uchun Super Admin huquqi kerak!"
+          );
+        }
+
+        logger.debug("⚠️ Super Admin active shartnomani o'chirmoqda");
+      }
+
+      // 3. Import cascade delete handler
+      const { cascadeDeleteContract } = await import("../../middlewares/cascade.middleware");
+      
+      // 4. Execute cascade delete (will handle payments and debtors)
+      await cascadeDeleteContract(contractId);
+
+      // 5. Soft delete contract
+      contract.isDeleted = true;
+      contract.deletedAt = new Date();
+      await contract.save();
+
+      // 6. Audit log
+      const customerData = contract.customer as any;
+      await auditLogService.logContractDelete(
+        contractId,
+        customerData._id.toString(),
+        customerData.fullName,
+        contract.productName,
+        user.sub
+      );
+
+      logger.debug("🎉 === CONTRACT DELETE COMPLETED ===");
+      return {
+        message: "Shartnoma muvaffaqiyatli o'chirildi",
+        contractId: contract._id,
+      };
+    } catch (error) {
+      logger.error("❌ === CONTRACT DELETE FAILED ===");
+      throw error;
+    }
+  }
 }
 
 export default new ContractService();

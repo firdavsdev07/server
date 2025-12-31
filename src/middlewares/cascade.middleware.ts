@@ -206,16 +206,8 @@ export async function cascadeDeleteContract(
   try {
     logger.debug(`🗑️ CASCADE DELETE: Contract ${contractId}`);
 
-    // 1. Active contract'ni tekshirish
-    const contract = await Contract.findById(contractId).session(
-      session || null
-    );
-
-    if (contract && contract.status === "active") {
-      throw BaseError.BadRequest(
-        "Active shartnomani o'chirib bo'lmaydi! Avval shartnomani yoping (status: completed yoki cancelled)."
-      );
-    }
+    // Note: Active contract check is done in contract.service.ts before calling this function
+    // Super Admin can delete active contracts
 
     // 2. Payment'larni logical delete
     const updatedPayments = await Payment.updateMany(

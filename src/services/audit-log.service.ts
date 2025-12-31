@@ -408,6 +408,38 @@ class AuditLogService {
   }
 
   /**
+   * Shartnoma o'chirish audit log
+   */
+  async logContractDelete(
+    contractId: string,
+    customerId: string,
+    customerName: string,
+    productName: string,
+    userId: string
+  ): Promise<void> {
+    await this.createLog({
+      action: AuditAction.DELETE,
+      entity: AuditEntity.CONTRACT,
+      entityId: contractId,
+      userId,
+      metadata: {
+        affectedEntities: [
+          {
+            entityType: "contract",
+            entityId: contractId,
+            entityName: `${customerName} - ${productName}`,
+          },
+          {
+            entityType: "customer",
+            entityId: customerId,
+            entityName: customerName,
+          },
+        ],
+      },
+    });
+  }
+
+  /**
    * Login audit log
    */
   async logLogin(
