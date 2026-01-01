@@ -21,10 +21,8 @@ import Payment from "../schemas/payment.schema";
 import Contract from "../schemas/contract.schema";
 
 export async function up(): Promise<void> {
-  console.log("🔄 Starting migration: Add payment and contract fields...");
 
   try {
-    // Update all existing Payment documents
     const paymentUpdateResult = await Payment.updateMany(
       {
         linkedPaymentId: { $exists: false },
@@ -39,11 +37,7 @@ export async function up(): Promise<void> {
       }
     );
 
-    console.log(
-      `✅ Updated ${paymentUpdateResult.modifiedCount} Payment documents`
-    );
 
-    // Update all existing Contract documents
     const contractUpdateResult = await Contract.updateMany(
       {
         prepaidBalance: { $exists: false },
@@ -56,24 +50,18 @@ export async function up(): Promise<void> {
       }
     );
 
-    console.log(
-      `✅ Updated ${contractUpdateResult.modifiedCount} Contract documents`
-    );
 
-    console.log("🎉 Migration completed successfully!");
+    console.log("Migration completed successfully!");
   } catch (error) {
-    console.error("❌ Migration failed:", error);
+    console.error(" Migration failed:", error);
     throw error;
   }
 }
 
 export async function down(): Promise<void> {
-  console.log(
-    "🔄 Rolling back migration: Remove payment and contract fields..."
-  );
+
 
   try {
-    // Remove fields from Payment documents
     const paymentRollbackResult = await Payment.updateMany(
       {},
       {
@@ -86,11 +74,6 @@ export async function down(): Promise<void> {
       }
     );
 
-    console.log(
-      `✅ Rolled back ${paymentRollbackResult.modifiedCount} Payment documents`
-    );
-
-    // Remove fields from Contract documents
     const contractRollbackResult = await Contract.updateMany(
       {},
       {
@@ -101,36 +84,31 @@ export async function down(): Promise<void> {
       }
     );
 
-    console.log(
-      `✅ Rolled back ${contractRollbackResult.modifiedCount} Contract documents`
-    );
+ 
 
-    console.log("🎉 Rollback completed successfully!");
+    console.log(" Rollback completed successfully!");
   } catch (error) {
-    console.error("❌ Rollback failed:", error);
+    console.error(" Rollback failed:", error);
     throw error;
   }
 }
 
-// Run migration if executed directly
 if (require.main === module) {
   const runMigration = async () => {
     try {
-      // Connect to MongoDB
       const mongoUri =
         process.env.MONGO_URI || "mongodb://localhost:27017/your-db";
       await mongoose.connect(mongoUri);
-      console.log("📦 Connected to MongoDB");
+      console.log("Connected to MongoDB");
 
-      // Run migration
       await up();
 
       // Disconnect
       await mongoose.disconnect();
-      console.log("👋 Disconnected from MongoDB");
+      console.log("Disconnected from MongoDB");
       process.exit(0);
     } catch (error) {
-      console.error("❌ Migration execution failed:", error);
+      console.error("Migration execution failed:", error);
       process.exit(1);
     }
   };

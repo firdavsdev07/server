@@ -9,12 +9,66 @@ import { Types } from "mongoose";
 class CustomerService {
   // Barcha yangi mijozlarni ko'rish
   async getAllNew(userId: string) {
-    const query: any = {
-      isDeleted: false,
-      isActive: false,
-    };
-    const customers = await Customer.find(query).sort({ createdAt: -1 });
-    return customers;
+    // ✅ TUZATISH: Eng eski shartnoma sanasini olish
+    return await Customer.aggregate([
+      {
+        $match: {
+          isDeleted: false,
+          isActive: false,
+        },
+      },
+      {
+        $lookup: {
+          from: "contracts",
+          localField: "_id",
+          foreignField: "customer",
+          as: "contracts",
+          pipeline: [
+            {
+              $match: {
+                isDeleted: false,
+              },
+            },
+            {
+              $sort: { createdAt: -1 }, // ✅ TUZATISH: Eng YANGI shartnoma birinchi (oxirgi yaratilgan)
+            },
+          ],
+        },
+      },
+      {
+        $addFields: {
+          // Eng YANGI (oxirgi) shartnomaning createdAt sanasini olish
+          latestContractDate: {
+            $ifNull: [
+              { $arrayElemAt: ["$contracts.createdAt", 0] },
+              "$createdAt",
+            ],
+          },
+        },
+      },
+      {
+        $project: {
+          fullName: 1,
+          phoneNumber: 1,
+          address: 1,
+          passportSeries: 1,
+          birthDate: 1,
+          telegramName: 1,
+          telegramId: 1,
+          auth: 1,
+          manager: 1,
+          files: 1,
+          editHistory: 1,
+          isActive: 1,
+          isDeleted: 1,
+          deletedAt: 1,
+          createBy: 1,
+          createdAt: "$latestContractDate", // ✅ Eng YANGI (oxirgi) shartnoma sanasini qaytarish
+          updatedAt: 1,
+        },
+      },
+      { $sort: { createdAt: -1 } },
+    ]);
   }
 
   // Bitta mijozni ko'rish

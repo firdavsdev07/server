@@ -242,10 +242,12 @@ class ExcelImportService {
 
   /**
    * Mijoz yaratish yoki topish
+   * ✅ TUZATISH: contractStartDate parametri qo'shildi
    */
   private async findOrCreateCustomer(
     customerName: string,
-    managerId: Types.ObjectId
+    managerId: Types.ObjectId,
+    contractStartDate?: Date
   ): Promise<Types.ObjectId> {
     // Mijoz nomini tozalash
     const fullName = customerName.trim();
@@ -260,7 +262,8 @@ class ExcelImportService {
       // Yangi mijoz yaratish
       const auth = await Auth.create({});
 
-      customer = await Customer.create({
+      // ✅ TUZATISH: Mijoz yaratilgan sanani shartnoma sanasiga moslashtirish
+      const customerData: any = {
         fullName,
         phoneNumber: "",
         address: "",
@@ -270,7 +273,16 @@ class ExcelImportService {
         auth: auth._id,
         isActive: true,
         isDeleted: false,
-      });
+      };
+
+      // Agar shartnoma sanasi berilgan bo'lsa, createdAt ni o'rnatish
+      if (contractStartDate) {
+        customerData.createdAt = contractStartDate;
+        customerData.updatedAt = contractStartDate;
+        logger.debug(`  📅 Setting customer createdAt to: ${dayjs(contractStartDate).format('YYYY-MM-DD')}`);
+      }
+
+      customer = await Customer.create(customerData);
 
       logger.debug(`✅ Created new customer: ${fullName}`);
 
@@ -669,6 +681,8 @@ class ExcelImportService {
         confirmedAt: monthPayment.paidDate,
         confirmedBy: managerId,
         targetMonth: monthPayment.monthIndex,
+        createdAt: monthPayment.paidDate, // ✅ Excel'dagi to'lov sanasini o'rnatish
+        updatedAt: monthPayment.paidDate, // ✅ Yangilanish sanasini ham o'rnatish
       });
 
       paymentIds.push(paymentDoc._id);
@@ -762,14 +776,18 @@ class ExcelImportService {
 
         logger.debug(`\nProcessing row ${rowNumber}: ${row[3]}`);
 
-        // 1. Mijozni yaratish yoki topish
+        // 1. Shartnoma boshlanish sanasini olish (mijoz yaratish uchun kerak)
+        const contractStartDate = this.parseDate(row[0]);
+
+        // 2. Mijozni yaratish yoki topish (✅ shartnoma sanasini o'tkazamiz)
         const customerName = row[3] ? row[3].toString().trim() : "Unknown Customer";
         const customerId = await this.findOrCreateCustomer(
           customerName,
-          managerObjectId
+          managerObjectId,
+          contractStartDate // ✅ Shartnoma sanasini o'tkazish
         );
 
-        // 2. Shartnoma ma'lumotlarini parse qilish
+        // 3. Shartnoma ma'lumotlarini parse qilish
         const initialPayment = parseFloat(row[7]) || 0;
         const period = parseInt(row[8]) || 12;
         const monthlyPayment = parseFloat(row[9]) || 0;
@@ -799,8 +817,8 @@ class ExcelImportService {
         }
 
         const contractData = {
-          startDate: this.parseDate(row[0]),
-          initialPaymentDueDate: this.parseDate(row[0]), // ✅ FIXED: startDate bilan bir xil
+          startDate: contractStartDate, // ✅ Oldindan parse qilingan sana
+          initialPaymentDueDate: contractStartDate, // ✅ FIXED: startDate bilan bir xil
           nextPaymentDate: this.parseDate(row[2]),
           customer: customerId,
           productName: row[4] || "Unknown",
@@ -826,6 +844,7 @@ class ExcelImportService {
         });
 
         // 4. Shartnoma yaratish
+        // ✅ TUZATISH: createdAt ni startDate ga tenglashtirish
         const contract = await Contract.create({
           customer: customerId,
           productName: contractData.productName,
@@ -851,6 +870,8 @@ class ExcelImportService {
           },
           payments: [],
           createBy: managerObjectId,
+          createdAt: contractData.startDate, // ✅ Excel'dagi shartnoma yaratilgan sanani o'rnatish
+          updatedAt: contractData.startDate, // ✅ Yangilanish sanasini ham o'rnatish
         });
 
         logger.debug(`  ✓ Contract created: ${contract._id}`);
@@ -969,6 +990,8 @@ class ExcelImportService {
             confirmedAt: contractData.startDate,
             confirmedBy: managerObjectId,
             targetMonth: 0, // ✅ FIXED: Initial payment = 0 (oy emas)
+            createdAt: contractData.startDate, // ✅ Excel'dagi shartnoma sanasini o'rnatish
+            updatedAt: contractData.startDate, // ✅ Yangilanish sanasini ham o'rnatish
           });
 
           contract.payments.push(initialPayment._id as any);
