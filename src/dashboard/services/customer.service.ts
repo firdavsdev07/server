@@ -267,7 +267,6 @@ class CustomerService {
       {
         $match: {
           isDeleted: false,
-          isActive: true,
           customer: new Types.ObjectId(customerId),
         },
       },
@@ -312,6 +311,7 @@ class CustomerService {
               $project: {
                 _id: 1,
                 amount: 1,
+                actualAmount: 1, // ✅ TUZATILDI: Haqiqiy to'langan summa
                 date: 1,
                 isPaid: 1,
                 paymentType: 1,
@@ -319,7 +319,11 @@ class CustomerService {
                 remainingAmount: 1,
                 excessAmount: 1,
                 expectedAmount: 1,
+                prepaidAmount: 1, // ✅ TUZATILDI: Oldindan to'langan summa
                 notes: 1,
+                confirmedAt: 1, // ✅ TUZATILDI: Tasdiqlangan vaqt
+                confirmedBy: 1, // ✅ TUZATILDI: Kim tomonidan tasdiqlangan
+                targetMonth: 1,
               },
             },
           ],
@@ -334,11 +338,11 @@ class CustomerService {
                   $filter: {
                     input: "$payments",
                     as: "p",
-                    cond: { $eq: ["$$p.isPaid", true] }
+                    cond: { $eq: ["$$p.isPaid", true] },
                   },
                 },
                 as: "pp",
-                in: "$$pp.amount",
+                in: { $ifNull: ["$$pp.actualAmount", "$$pp.amount"] },
               },
             },
           },
@@ -346,25 +350,101 @@ class CustomerService {
       },
       {
         $addFields: {
-          remainingDebt: {
-            $subtract: ["$totalPrice", "$totalPaid"],
+          // 1. Basic price field safety
+          safeInitial: { $ifNull: ["$initialPayment", 0] },
+          safeMonthly: { $ifNull: ["$monthlyPayment", 0] },
+          safeOriginal: { $ifNull: ["$originalPrice", { $ifNull: ["$price", 0] }] },
+          safePrice: { $ifNull: ["$price", { $ifNull: ["$originalPrice", 0] }] },
+
+          // 2. Period recovery (treat 0 as missing)
+          rawPeriod: {
+            $cond: [
+              { $gt: [{ $ifNull: ["$period", { $ifNull: ["$duration", 0] }] }, 0] },
+              { $ifNull: ["$period", "$duration"] },
+              null
+            ]
           },
+          rawPercentage: { $ifNull: ["$percentage", { $ifNull: ["$percent", 0] }] },
+        },
+      },
+      {
+        $addFields: {
+          // 3. Derived period if missing
+          safePeriod: {
+            $convert: {
+              input: {
+                $ifNull: [
+                  "$rawPeriod",
+                  {
+                    $cond: [
+                      {
+                        $and: [
+                          { $gt: ["$safeMonthly", 0] },
+                          { $gt: ["$totalPrice", "$safeInitial"] },
+                        ],
+                      },
+                      {
+                        $ceil: {
+                          $divide: [
+                            { $subtract: ["$totalPrice", "$safeInitial"] },
+                            "$safeMonthly",
+                          ],
+                        },
+                      },
+                      0,
+                    ],
+                  },
+                ],
+              },
+              to: "double",
+              onNull: 0,
+              onError: 0,
+            },
+          },
+        },
+      },
+      {
+        $addFields: {
+          // 4. Final Total Price (if not present)
+          safeTotal: {
+            $ifNull: [
+              "$totalPrice",
+              { $add: ["$safeInitial", { $multiply: ["$safeMonthly", "$safePeriod"] }] },
+            ],
+          },
+        },
+      },
+      {
+        $addFields: {
+          remainingDebt: { $subtract: ["$safeTotal", "$totalPaid"] },
         },
       },
       {
         $project: {
           _id: 1,
           productName: 1,
-          totalPrice: 1,
-          initialPayment: 1,
-          monthlyPayment: 1,
+          originalPrice: { $convert: { input: "$safeOriginal", to: "double", onNull: 0, onError: 0 } },
+          price: { $convert: { input: "$safePrice", to: "double", onNull: 0, onError: 0 } },
+          totalPrice: "$safeTotal",
+          initialPayment: "$safeInitial",
+          initialPaymentDueDate: 1,
+          monthlyPayment: "$safeMonthly",
+          percentage: { $convert: { input: "$rawPercentage", to: "double", onNull: 0, onError: 0 } },
+          period: "$safePeriod",
+          duration: "$safePeriod",
+          startDate: 1,
+          endDate: 1,
+          status: 1,
+          notes: 1,
+          payments: 1,
           totalPaid: 1,
           remainingDebt: 1,
-          startDate: 1,
-          status: 1,
-          payments: 1,
-          notes: 1,
+          info: 1,
+          nextPaymentDate: 1,
+          previousPaymentDate: 1,
+          prepaidBalance: 1,
           createdAt: 1,
+          updatedAt: 1,
         },
       },
       { $sort: { createdAt: -1 } },
@@ -437,14 +517,14 @@ class CustomerService {
       files: customerFiles,
     });
     await customer.save();
-    
+
     // 🔍 AUDIT LOG: Customer yaratish
     await auditLogService.logCustomerCreate(
       customer._id.toString(),
       data.fullName,
       user.sub
     );
-    
+
     return { message: "Mijoz yaratildi.", customer };
   }
 
@@ -499,7 +579,7 @@ class CustomerService {
     if (
       data.birthDate &&
       new Date(data.birthDate).getTime() !==
-        new Date(customer.birthDate).getTime()
+      new Date(customer.birthDate).getTime()
     ) {
       changes.push({
         field: "Tug'ilgan sana",
