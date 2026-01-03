@@ -123,7 +123,7 @@ class DebtorService {
             remainingDebt: { $sum: "$contractRemainingDebt" },
             nextPaymentDate: { $min: "$nextPaymentDate" },
             createdAt: { $first: "$createdAt" },
-            // Shartnomalar ro'yxati
+            // Shartnomalar ro'yxati (har birining kechikkan kuni bilan)
             contracts: {
               $push: {
                 _id: "$_id",
@@ -136,10 +136,12 @@ class DebtorService {
                 initialPayment: "$initialPayment",
                 startDate: "$startDate",
                 nextPaymentDate: "$nextPaymentDate",
-                delayDays: "$delayDays",
+                delayDays: "$delayDays", // ✅ Har bir shartnomaning alohida kechikkan kuni
                 paidMonthsCount: "$paidMonthsCount",
               },
             },
+            // ✅ YANGI: Barcha shartnomalarning kechikkan kunlari (noyob qiymatlar)
+            allDelayDays: { $addToSet: "$delayDays" },
           },
         },
         {
@@ -415,33 +417,86 @@ class DebtorService {
 
   /**
    * Avtomatik qarzdorlar yaratish (har kecha 00:00)
+   * ✅ YANGI: Contract-based approach - har bir contract uchun barcha kechikkan to'lovlarni tekshirish
    */
   async createOverdueDebtors() {
     try {
       const today = new Date();
-      const overdueContracts = await Contract.find({
+      today.setHours(0, 0, 0, 0);
+      
+      logger.info("🔍 === CREATING OVERDUE DEBTORS ===");
+      logger.info(`Today: ${today.toISOString()}`);
+      
+      // ✅ Contract-based: Barcha active shartnomalarni olish
+      const contracts = await Contract.find({
         isActive: true,
         isDeleted: false,
         isDeclare: false,
         status: ContractStatus.ACTIVE,
-        nextPaymentDate: { $lte: today },
-      });
+      }).populate('payments');
+      
+      logger.info(`📊 Checking ${contracts.length} active contract(s)`);
+      
       let createdCount = 0;
-      for (const contract of overdueContracts) {
-        const existingDebtor = await Debtor.findOne({ contractId: contract._id });
-        if (!existingDebtor) {
-          const overdueDays = Math.floor((today.getTime() - contract.nextPaymentDate.getTime()) / (1000 * 60 * 60 * 24));
-          await Debtor.create({
+      let skippedCount = 0;
+      let overduePaymentsCount = 0;
+      
+      for (const contract of contracts) {
+        const payments = contract.payments as any[];
+        
+        // ✅ Har bir contract uchun kechikkan to'lovlarni topish
+        const overduePayments = payments.filter(p => 
+          !p.isPaid && 
+          p.paymentType === PaymentType.MONTHLY && 
+          new Date(p.date) < today
+        );
+        
+        if (overduePayments.length === 0) {
+          continue;
+        }
+        
+        overduePaymentsCount += overduePayments.length;
+        
+        // ✅ Har bir kechikkan to'lov uchun alohida debtor yaratish
+        for (const payment of overduePayments) {
+          const paymentDate = new Date(payment.date);
+          
+          // Debtor allaqachon mavjudmi? (dueDate bo'yicha)
+          const existingDebtor = await Debtor.findOne({ 
             contractId: contract._id,
-            debtAmount: contract.monthlyPayment,
-            dueDate: contract.nextPaymentDate,
-            overdueDays: Math.max(0, overdueDays),
-            createBy: contract.createBy,
+            dueDate: paymentDate
           });
-          createdCount++;
+          
+          if (!existingDebtor) {
+            const overdueDays = Math.floor((today.getTime() - paymentDate.getTime()) / (1000 * 60 * 60 * 24));
+            
+            await Debtor.create({
+              contractId: contract._id,
+              debtAmount: payment.amount,
+              dueDate: paymentDate,
+              overdueDays: Math.max(0, overdueDays),
+              createBy: contract.createBy,
+            });
+            
+            createdCount++;
+            logger.debug(`✅ Debtor created: Contract ${contract._id}, Due: ${paymentDate.toISOString().split('T')[0]}, Overdue: ${overdueDays} days`);
+          } else {
+            // ✅ Mavjud debtor'ni yangilash (overdueDays)
+            const overdueDays = Math.floor((today.getTime() - paymentDate.getTime()) / (1000 * 60 * 60 * 24));
+            existingDebtor.overdueDays = Math.max(0, overdueDays);
+            await existingDebtor.save();
+            skippedCount++;
+          }
         }
       }
-      return { created: createdCount };
+      
+      logger.info(`✅ Debtor creation completed: Found ${overduePaymentsCount} overdue payment(s), Created ${createdCount}, Updated ${skippedCount}`);
+      
+      return { 
+        created: createdCount,
+        updated: skippedCount,
+        totalOverduePayments: overduePaymentsCount
+      };
     } catch (error) {
       logger.error("❌ Error creating overdue debtors:", error);
       throw BaseError.InternalServerError("Qarzdorlar yaratishda xatolik");

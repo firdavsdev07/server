@@ -2,6 +2,7 @@ import { Router } from "express";
 import { Permission } from "../../enums/permission.enum";
 import { checkPermission } from "../../middlewares/CheckPermission.middleware";
 import contractController from "../controllers/contract.controller";
+import contractDateController from "../controllers/contract.controller.date";
 
 const router = Router();
 
@@ -63,6 +64,23 @@ router.delete(
   "/delete/:id",
   checkPermission(Permission.DELETE_CONTRACT),
   contractController.deleteContract
+);
+
+// ========================================
+// 📅 CONTRACT DATE EDIT ROUTES
+// ONLY: admin, moderator
+// ========================================
+
+router.post(
+  "/update-start-date",
+  checkPermission(Permission.UPDATE_CONTRACT),
+  contractDateController.updateStartDate
+);
+
+router.post(
+  "/preview-date-change",
+  checkPermission(Permission.VIEW_CONTRACT),
+  contractDateController.previewDateChange
 );
 
 export default router;
