@@ -50,6 +50,13 @@ class CustomerService {
               },
             },
             {
+              $project: {
+                _id: 1,
+                originalPaymentDay: 1,  // ✅ originalPaymentDay ni qo'shish
+                createdAt: 1,
+              },
+            },
+            {
               $sort: { createdAt: -1 }, // ✅ TUZATISH: Eng YANGI shartnoma birinchi (oxirgi yaratilgan)
             },
           ],
@@ -84,6 +91,7 @@ class CustomerService {
           createBy: 1,
           createdAt: "$latestContractDate", // ✅ Eng YANGI (oxirgi) shartnoma sanasini qaytarish
           updatedAt: 1,
+          contracts: 1,  // ✅ contracts arrayni qaytarish
           manager: {
             $cond: {
               if: { $ifNull: ["$manager._id", false] },
@@ -137,6 +145,13 @@ class CustomerService {
               },
             },
             {
+              $project: {
+                _id: 1,
+                originalPaymentDay: 1,  // ✅ originalPaymentDay ni qo'shish
+                createdAt: 1,
+              },
+            },
+            {
               $sort: { createdAt: -1 }, // ✅ TUZATISH: Eng YANGI shartnoma birinchi (oxirgi yaratilgan)
             },
           ],
@@ -162,6 +177,7 @@ class CustomerService {
           passportSeries: 1,
           birthDate: 1,
           createdAt: "$latestContractDate", // ✅ Eng YANGI (oxirgi) shartnoma sanasini qaytarish
+          contracts: 1,  // ✅ contracts arrayni qaytarish
           manager: {
             $ifNull: [
               {

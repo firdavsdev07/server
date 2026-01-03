@@ -60,6 +60,17 @@ const startServer = async () => {
       }
     }, 5000);
 
+    // 🔥 MANUAL TRIGGER - 30 soniyadan keyin qayta tekshirish
+    setTimeout(async () => {
+      try {
+        logger.info("🔥 === MANUAL DEBTOR TRIGGER (DEBUG) ===");
+        const result = await debtorService.createOverdueDebtors();
+        logger.info("🔥 Manual trigger result:", result);
+      } catch (error) {
+        logger.error("Error in manual debtor trigger:", error);
+      }
+    }, 30000); // 30 soniya
+
     setTimeout(async () => {
       try {
         logger.debug("🔍 Starting contract status check...");
