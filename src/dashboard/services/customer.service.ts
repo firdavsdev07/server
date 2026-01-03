@@ -311,7 +311,7 @@ class CustomerService {
               $project: {
                 _id: 1,
                 amount: 1,
-                actualAmount: 1, // ✅ TUZATILDI: Haqiqiy to'langan summa
+                actualAmount: 1, 
                 date: 1,
                 isPaid: 1,
                 paymentType: 1,
