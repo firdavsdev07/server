@@ -64,57 +64,39 @@ class PaymentService {
     );
     const Contract = (await import("../../schemas/contract.schema")).default;
 
-    const contract = await Contract.findById(existingDebtor.contractId._id).populate('payments');
+    const contract = await Contract.findOne({ 
+      _id: existingDebtor.contractId._id, 
+      isDeleted: false,
+      isActive: true 
+    }).populate('payments');
 
     if (!contract) {
       throw BaseError.NotFoundError("Shartnoma topilmadi");
     }
 
-    // ✅ TUZATISH: targetMonth'ni to'g'ri hisoblash
-    // To'langan oylik to'lovlar sonini hisoblash
+ 
     const paidMonthlyPayments = (contract.payments as any[]).filter(
       (p) => p.paymentType === PaymentType.MONTHLY && p.isPaid
     );
     const calculatedTargetMonth = paidMonthlyPayments.length + 1;
 
-    logger.debug(`📊 Debtor payment - calculated target month: ${calculatedTargetMonth}`, {
-      paidMonths: paidMonthlyPayments.length,
-      totalPeriod: contract.period,
-      providedTargetMonth: payData.targetMonth,
-    });
-
-    // ✅ TUZATISH: Qarzdorlik uchun expectedAmount = debtor.debtAmount
     const amountPaid = payData.amount;
-    // ✅ TUZATISH: amountPaid aslida frontend'dan kelgan remainingAmount (qarzning o'zi)
-    // Masalan: Oylik $100, to'landi $60 → remainingAmount: $48 (bu amountPaid ga teng)
-    const expectedDebtAmount = amountPaid; // ✅ Frontend'dan kelgan qarz summasi
+    const expectedDebtAmount = amountPaid; 
 
     let calculatedExcessAmount = 0;
     let calculatedRemainingAmount = 0;
-    let actualAmount = amountPaid; // ✅ Haqiqatda to'langan summa
+    let actualAmount = amountPaid; 
 
     if (amountPaid > expectedDebtAmount) {
-      // ✅ Ortiqcha to'lov: faqat qarzga teng qismni amount sifatida saqlash
       calculatedExcessAmount = amountPaid - expectedDebtAmount;
       actualAmount = amountPaid; // To'liq summa actualAmount'da
     } else if (amountPaid < expectedDebtAmount) {
-      // ✅ Kam to'lov: qolgan qarzni remainingAmount'da saqlash
       calculatedRemainingAmount = expectedDebtAmount - amountPaid;
       actualAmount = amountPaid;
     } else {
       actualAmount = amountPaid;
     }
 
-    logger.debug("💰 Debtor payment calculation:", {
-      amountPaid,
-      expectedDebtAmount,
-      actualAmount,
-      excessAmount: calculatedExcessAmount,
-      remainingAmount: calculatedRemainingAmount,
-      debtorDebtAmount: existingDebtor.debtAmount,
-    });
-
-    // ✅ YANGI: Kam to'lov bo'lsa, nextPaymentDate MAJBURIY
     if (calculatedRemainingAmount > 0) {
       if (!payData.nextPaymentDate) {
         throw BaseError.BadRequest(
@@ -122,10 +104,9 @@ class PaymentService {
         );
       }
 
-      // ✅ Validation: nextPaymentDate must be in future
       const nextDate = new Date(payData.nextPaymentDate);
       const today = new Date();
-      today.setHours(0, 0, 0, 0); // Reset time to start of day
+      today.setHours(0, 0, 0, 0); 
       nextDate.setHours(0, 0, 0, 0);
 
       if (nextDate <= today) {
@@ -134,12 +115,11 @@ class PaymentService {
         );
       }
 
-      logger.debug(`✅ nextPaymentDate validated: ${nextDate.toISOString()}`);
     }
 
     const paymentDoc = await Payment.create({
-      amount: expectedDebtAmount, // ✅ Qarzning asl summasi (masalan $48) - KASSADA SHU KO'RINADI
-      actualAmount: actualAmount, // ✅ Haqiqatda to'langan summa (masalan $48 yoki ko'proq)
+      amount: expectedDebtAmount, 
+      actualAmount: actualAmount,
       date: new Date(),
       isPaid: false,
       paymentType: PaymentType.MONTHLY,
@@ -147,11 +127,11 @@ class PaymentService {
       customerId: customer,
       managerId: manager._id,
       status: PaymentStatus.PENDING,
-      expectedAmount: expectedDebtAmount, // Kutilgan qarz ($48)
-      excessAmount: calculatedExcessAmount, // Hisoblangan ortiqcha (agar ko'p to'lasa)
-      remainingAmount: calculatedRemainingAmount, // Hisoblangan kam to'langan (agar kam to'lasa)
-      targetMonth: payData.targetMonth || calculatedTargetMonth, // ✅ Frontend'dan yoki backend'da hisoblangan
-      nextPaymentDate: payData.nextPaymentDate ? new Date(payData.nextPaymentDate) : undefined, // ✅ YANGI
+      expectedAmount: expectedDebtAmount, 
+      excessAmount: calculatedExcessAmount, 
+      remainingAmount: calculatedRemainingAmount, 
+      targetMonth: payData.targetMonth || calculatedTargetMonth, 
+      nextPaymentDate: payData.nextPaymentDate ? new Date(payData.nextPaymentDate) : undefined, 
     });
 
     // ✅ MUHIM: PENDING payment'ni contract'ga qo'shamiz (frontend uchun zarur!)
@@ -159,24 +139,21 @@ class PaymentService {
     contract.payments.push(paymentDoc._id as any);
     await contract.save();
 
-    logger.info("⏳ Payment created in PENDING status and added to contract.payments");
-    logger.info("⏳ Waiting for cash confirmation");
-    logger.info("⏳ Contract.payments will be updated after confirmation (isPaid, status)");
-
-    // ❌ Balance yangilanmaydi - faqat kassa tasdiqlanganda
-    // ❌ Debtor o'chirilmaydi - faqat kassa tasdiqlanganda
-    // ❌ nextPaymentDate yangilanmaydi - faqat kassa tasdiqlanganda
 
     return {
       status: "success",
       message: "To'lov qabul qilindi, kassa tasdiqlashi kutilmoqda",
       paymentId: paymentDoc._id,
-      isPending: true, // ⏳ Kassa tasdiqlashi kerak
+      isPending: true, 
     };
   }
 
   async payNewDebt(payData: PayNewDebtDto, user: IJwtUser) {
-    const existingContract = await Contract.findById(payData.id).populate('payments');
+    const existingContract = await Contract.findOne({ 
+      _id: payData.id, 
+      isDeleted: false,
+      isActive: true 
+    }).populate('payments');
 
     if (!existingContract) {
       throw BaseError.NotFoundError("Shartnoma topilmadi yoki o'chirilgan");
@@ -195,37 +172,25 @@ class PaymentService {
     });
     await notes.save();
 
-    // ⏳ YANGI LOGIKA - To'lovlar PENDING statusda yaratiladi (kassa tasdiqlashi kerak)
     const Payment = (await import("../../schemas/payment.schema")).default;
     const { PaymentType, PaymentStatus } = await import(
       "../../schemas/payment.schema"
     );
 
-    // ✅ TUZATISH: targetMonth'ni to'g'ri hisoblash
-    // To'langan oylik to'lovlar sonini hisoblash
     const paidMonthlyPayments = (existingContract.payments as any[]).filter(
       (p) => p.paymentType === PaymentType.MONTHLY && p.isPaid
     );
     const calculatedTargetMonth = paidMonthlyPayments.length + 1;
-
-    logger.debug(`📊 New debt payment - calculated target month: ${calculatedTargetMonth}`, {
-      paidMonths: paidMonthlyPayments.length,
-      totalPeriod: existingContract.period,
-      providedTargetMonth: payData.targetMonth,
-    });
-
-    // ✅ TUZATISH: Ortiqcha/kam summani hisoblash
     const amountPaid = payData.amount;
     const expectedMonthlyPayment = existingContract.monthlyPayment;
 
     let calculatedExcessAmount = 0;
     let calculatedRemainingAmount = 0;
-    let actualAmount = amountPaid; // ✅ Haqiqatda to'langan summa
+    let actualAmount = amountPaid;
 
     if (amountPaid > expectedMonthlyPayment) {
-      // ✅ Ortiqcha to'lov: faqat oylik to'lovga teng qismni amount sifatida saqlash
       calculatedExcessAmount = amountPaid - expectedMonthlyPayment;
-      actualAmount = amountPaid; // To'liq summa actualAmount'da
+      actualAmount = amountPaid;
     } else if (amountPaid < expectedMonthlyPayment) {
       calculatedRemainingAmount = expectedMonthlyPayment - amountPaid;
       actualAmount = amountPaid;
@@ -233,16 +198,6 @@ class PaymentService {
       actualAmount = amountPaid;
     }
 
-    logger.info("💰 BOT Payment calculation (payNewDebt):", {
-      amountPaid,
-      expectedMonthlyPayment,
-      actualAmount,
-      excessAmount: calculatedExcessAmount,
-      remainingAmount: calculatedRemainingAmount,
-      targetMonth: payData.targetMonth || calculatedTargetMonth,
-    });
-
-    // ✅ YANGI: Kam to'lov bo'lsa, nextPaymentDate MAJBURIY
     if (calculatedRemainingAmount > 0) {
       if (!payData.nextPaymentDate) {
         throw BaseError.BadRequest(
@@ -250,7 +205,6 @@ class PaymentService {
         );
       }
 
-      // ✅ Validation: nextPaymentDate must be in future
       const nextDate = new Date(payData.nextPaymentDate);
       const today = new Date();
       today.setHours(0, 0, 0, 0); // Reset time to start of day
@@ -262,12 +216,10 @@ class PaymentService {
         );
       }
 
-      logger.debug(`✅ nextPaymentDate validated: ${nextDate.toISOString()}`);
     }
 
     const finalTargetMonth = payData.targetMonth || calculatedTargetMonth;
 
-    // ✅ TUZATILDI: Avval mavjud placeholder payment (eslatma uchun yaratilgan) borligini tekshirish
     const existingPlaceholder = (existingContract.payments as any[]).find(
       (p) => Number(p.targetMonth) === Number(finalTargetMonth) &&
         p.paymentType === PaymentType.MONTHLY &&
@@ -278,8 +230,6 @@ class PaymentService {
     let paymentDoc;
 
     if (existingPlaceholder) {
-      // ✅ Mavjud placeholder paymentni yangilash (dublikat yaratmaslik uchun)
-      logger.info(`📝 Found existing placeholder payment for month ${finalTargetMonth}, updating it`);
 
       paymentDoc = await Payment.findByIdAndUpdate(
         existingPlaceholder._id,
@@ -289,19 +239,16 @@ class PaymentService {
           date: new Date(),
           notes: notes._id,
           managerId: manager._id,
-          status: PaymentStatus.PENDING, // ✅ Endi PENDING - kassaga tushadi
+          status: PaymentStatus.PENDING, 
           expectedAmount: expectedMonthlyPayment,
           excessAmount: calculatedExcessAmount,
           remainingAmount: calculatedRemainingAmount,
           nextPaymentDate: payData.nextPaymentDate ? new Date(payData.nextPaymentDate) : undefined,
-          // reminderDate saqlanadi - o'chirilmaydi
         },
         { new: true }
       );
 
-      logger.info(`✅ Placeholder payment updated to PENDING: ${paymentDoc?._id}`);
     } else {
-      // ✅ Yangi payment yaratish (oldingi logika)
       paymentDoc = await Payment.create({
         amount: expectedMonthlyPayment,
         actualAmount: actualAmount,
@@ -319,19 +266,10 @@ class PaymentService {
         nextPaymentDate: payData.nextPaymentDate ? new Date(payData.nextPaymentDate) : undefined,
       });
 
-      // ✅ Faqat yangi payment uchun contract'ga qo'shish
       existingContract.payments.push(paymentDoc._id as any);
       await existingContract.save();
     }
 
-    logger.info("⏳ Payment created in PENDING status and added to contract.payments");
-    logger.info("⏳ Waiting for cash confirmation");
-    logger.info("⏳ Contract.payments will be updated after confirmation (isPaid, status)");
-
-    // ❌ Balance yangilanmaydi - faqat kassa tasdiqlanganda
-    // ❌ nextPaymentDate yangilanmaydi - faqat kassa tasdiqlanganda
-
-    // ✅ paymentDoc null tekshiruvi
     if (!paymentDoc) {
       throw BaseError.InternalServerError("To'lov yaratishda xatolik yuz berdi");
     }
@@ -340,19 +278,13 @@ class PaymentService {
       status: "success",
       message: "To'lov qabul qilindi, kassa tasdiqlashi kutilmoqda",
       paymentId: paymentDoc._id,
-      isPending: true, // ⏳ Kassa tasdiqlashi kerak
+      isPending: true,
     };
   }
 
 
-  /**
-   * Manager'ning PENDING to'lovlarini olish
-   * Requirements: A5 - Backend API
-   */
   async getMyPendingPayments(user: IJwtUser) {
     try {
-      logger.debug("📋 === GETTING MY PENDING PAYMENTS ===");
-      logger.debug("Manager ID:", user.sub);
 
       const pendingPayments = await Payment.find({
         managerId: user.sub,
@@ -369,7 +301,6 @@ class PaymentService {
         })
         .sort({ createdAt: -1 });
 
-      logger.debug(`✅ Found ${pendingPayments.length} PENDING payment(s)`);
 
       const formattedPayments = pendingPayments.map((payment) => {
         const customer = payment.customerId as any;
@@ -405,7 +336,6 @@ class PaymentService {
         payments: formattedPayments,
       };
     } catch (error) {
-      logger.error("❌ Error getting my pending payments:", error);
       throw BaseError.InternalServerError(
         "PENDING to'lovlarni olishda xatolik"
       );
@@ -417,7 +347,6 @@ class PaymentService {
    */
   async getMyPendingStats(user: IJwtUser) {
     try {
-      logger.debug("📊 === GETTING MY PENDING STATS ===");
 
       const pendingPayments = await Payment.find({
         managerId: user.sub,
@@ -461,16 +390,10 @@ class PaymentService {
         },
       };
     } catch (error) {
-      logger.error("❌ Error getting pending stats:", error);
       throw BaseError.InternalServerError("Statistikani olishda xatolik");
     }
   }
 
-  /**
-   * ✅ YANGI: To'lov uchun eslatma sanasini belgilash
-   * Manager o'zi uchun reminder sifatida kun belgilaydi
-   * Bu payment date'ni o'zgartirmaydi, faqat manager uchun eslatma
-   */
   async setPaymentReminder(
     contractId: string,
     targetMonth: number,
@@ -478,13 +401,12 @@ class PaymentService {
     user: IJwtUser
   ) {
     try {
-      logger.debug("🔔 === SETTING PAYMENT REMINDER ===");
-      logger.debug("Contract ID:", contractId);
-      logger.debug("Target Month:", targetMonth);
-      logger.debug("Reminder Date:", reminderDate);
 
-      // Contract'ni topish va payments'ni populate qilish
-      const contract = await Contract.findById(contractId)
+      const contract = await Contract.findOne({ 
+        _id: contractId, 
+        isDeleted: false,
+        isActive: true 
+      })
         .populate("payments")
         .populate("customer");
 
@@ -492,7 +414,6 @@ class PaymentService {
         throw BaseError.NotFoundError("Shartnoma topilmadi");
       }
 
-      // Manager faqat o'z mijozining shartnomasiga reminder qo'yishi mumkin
       const customer = contract.customer as any;
       const contractManagerId = customer?.manager?.toString();
 
@@ -503,38 +424,17 @@ class PaymentService {
         );
       }
 
-      // Target month uchun payment topish
-      logger.debug("🔍 Searching for payment:", {
-        targetMonth,
-        targetMonthType: typeof targetMonth,
-        paymentsCount: (contract.payments as any[]).length,
-        firstPayment: (contract.payments as any[])[0]
-      });
+
 
       const payment = (contract.payments as any[]).find(
         (p: any) => {
-          // ✅ TUZATISH: Strict equality va type checking
           const monthMatch = Number(p.targetMonth) === Number(targetMonth);
           const typeMatch = p.paymentType === PaymentType.MONTHLY;
-
-          logger.debug("Checking payment:", {
-            paymentTargetMonth: p.targetMonth,
-            paymentTargetMonthType: typeof p.targetMonth,
-            targetMonth: targetMonth,
-            targetMonthType: typeof targetMonth,
-            paymentType: p.paymentType,
-            monthMatch,
-            typeMatch,
-            finalMatch: monthMatch && typeMatch
-          });
 
           return monthMatch && typeMatch;
         }
       );
 
-      logger.debug("Payment search result:", { found: !!payment, paymentId: payment?._id });
-
-      // Reminder date validation (oldin tekshiramiz)
       const reminder = new Date(reminderDate);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -547,10 +447,7 @@ class PaymentService {
       let paymentId: string;
 
       if (!payment) {
-        // ✅ TUZATILDI: Agar payment mavjud bo'lmasa, yangi payment yaratamiz
-        logger.info(`📝 Payment not found for month ${targetMonth}, creating new payment with reminder`);
-
-        // Yangi Notes yaratish
+       
         const Notes = (await import("../../schemas/notes.schema")).default;
         const manager = await Employee.findById(user.sub);
 
@@ -565,12 +462,10 @@ class PaymentService {
         });
         await notes.save();
 
-        // To'lov sanasini hisoblash (startDate + targetMonth oy)
         const startDate = new Date(contract.startDate);
         const paymentDueDate = new Date(startDate);
         paymentDueDate.setMonth(paymentDueDate.getMonth() + targetMonth);
 
-        // Yangi payment yaratish (faqat reminder uchun placeholder)
         const newPayment = await Payment.create({
           amount: contract.monthlyPayment,
           date: paymentDueDate,
@@ -579,10 +474,10 @@ class PaymentService {
           notes: notes._id,
           customerId: customer._id,
           managerId: manager._id,
-          status: null, // ❌ PENDING emas - bu faqat placeholder
+          status: null, 
           expectedAmount: contract.monthlyPayment,
           targetMonth: targetMonth,
-          reminderDate: reminder, // ✅ Reminder bilan yaratiladi
+          reminderDate: reminder, 
         });
 
         // Contract'ga payment qo'shish
@@ -590,9 +485,7 @@ class PaymentService {
         await contract.save();
 
         paymentId = newPayment._id.toString();
-        logger.info(`✅ New payment created with reminder: ${paymentId}`);
       } else {
-        // Agar to'lov allaqachon to'langan bo'lsa, reminder qo'yish mumkin emas
         if (payment.isPaid) {
           throw BaseError.BadRequest("To'langan to'lovga reminder qo'yib bo'lmaydi");
         }
@@ -603,7 +496,6 @@ class PaymentService {
           reminderDate: reminder,
         });
 
-        logger.info(`✅ Reminder updated for existing payment ${paymentId} to ${reminderDate}`);
       }
 
       return {
@@ -612,23 +504,23 @@ class PaymentService {
         reminderDate: reminder,
       };
     } catch (error) {
-      logger.error("❌ Error setting payment reminder:", error);
       throw error;
     }
   }
 
-  /**
-   * ✅ YANGI: To'lov eslatmasini o'chirish
-   */
+
   async removePaymentReminder(
     contractId: string,
     targetMonth: number,
     user: IJwtUser
   ) {
     try {
-      logger.debug("🔕 === REMOVING PAYMENT REMINDER ===");
 
-      const contract = await Contract.findById(contractId)
+      const contract = await Contract.findOne({ 
+        _id: contractId, 
+        isDeleted: false,
+        isActive: true 
+      })
         .populate("payments")
         .populate("customer");
 
@@ -636,7 +528,6 @@ class PaymentService {
         throw BaseError.NotFoundError("Shartnoma topilmadi");
       }
 
-      // Manager faqat o'z mijozining shartnomasidan reminder o'chirishi mumkin
       const customer = contract.customer as any;
       const contractManagerId = customer?.manager?.toString();
 
@@ -647,21 +538,13 @@ class PaymentService {
         );
       }
 
-      logger.debug("🔍 Searching for payment to remove reminder:", {
-        targetMonth,
-        targetMonthType: typeof targetMonth,
-        paymentsCount: (contract.payments as any[]).length
-      });
 
       const payment = (contract.payments as any[]).find(
         (p: any) => Number(p.targetMonth) === Number(targetMonth) && p.paymentType === PaymentType.MONTHLY
       );
 
-      logger.debug("Payment found for removal:", { found: !!payment, paymentId: payment?._id });
 
       if (!payment) {
-        // Agar payment mavjud bo'lmasa, eslatma ham yo'q demak
-        logger.info(`ℹ️ No payment found for month ${targetMonth}, nothing to remove`);
         return {
           status: "success",
           message: "Eslatma topilmadi (hali belgilanmagan)",
@@ -670,7 +553,6 @@ class PaymentService {
 
       // Agar reminderDate mavjud bo'lmasa ham, muvaffaqiyat qaytaramiz
       if (!payment.reminderDate) {
-        logger.info(`ℹ️ Payment ${payment._id} has no reminder to remove`);
         return {
           status: "success",
           message: "Eslatma topilmadi (hali belgilanmagan)",
@@ -682,14 +564,12 @@ class PaymentService {
         $unset: { reminderDate: 1 },
       });
 
-      logger.info(`✅ Reminder removed for payment ${paymentId}`);
 
       return {
         status: "success",
         message: "Eslatma o'chirildi",
       };
     } catch (error) {
-      logger.error("❌ Error removing payment reminder:", error);
       throw error;
     }
   }

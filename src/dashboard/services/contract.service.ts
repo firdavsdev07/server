@@ -457,7 +457,7 @@ class ContractService {
    */
   async deleteContract(contractId: string, user: IJwtUser) {
     try {
-      logger.debug("🗑️ === CONTRACT DELETE STARTED ===");
+      logger.debug("🗑️ === CONTRACT SOFT DELETE STARTED ===");
       logger.debug(`Contract ID: ${contractId}`);
 
       // 1. Find contract
@@ -466,22 +466,22 @@ class ContractService {
         throw BaseError.NotFoundError("Shartnoma topilmadi");
       }
 
-      // 2. Check if contract is active (only Super Admin can delete active contracts)
+      // 2. Check if contract is active (only Admin can delete active contracts)
       if (contract.status === ContractStatus.ACTIVE) {
-        // Check if user is Super Admin
+        // Check if user is Admin
         const employee = await Employee.findById(user.sub).populate("role");
         const roleName = (employee?.role as any)?.name;
-        const isSuperAdmin = roleName === "admin";
+        const isAdmin = roleName === "admin";
 
-        logger.debug(`👤 User role: ${roleName}, isSuperAdmin: ${isSuperAdmin}`);
+        logger.debug(`👤 User role: ${roleName}, isAdmin: ${isAdmin}`);
 
-        if (!isSuperAdmin) {
+        if (!isAdmin) {
           throw BaseError.BadRequest(
-            "Aktiv shartnomani o'chirish uchun Super Admin huquqi kerak!"
+            "Aktiv shartnomani o'chirish uchun Admin huquqi kerak!"
           );
         }
 
-        logger.debug("⚠️ Super Admin active shartnomani o'chirmoqda");
+        logger.debug("⚠️ Admin active shartnomani o'chirmoqda");
       }
 
       // 3. Calculate total paid amount to revert from balance
@@ -535,14 +535,120 @@ class ContractService {
         employeeRole
       );
 
-      logger.debug("🎉 === CONTRACT DELETE COMPLETED ===");
+      logger.debug("🎉 === CONTRACT SOFT DELETE COMPLETED ===");
       return {
-        message: "Shartnoma muvaffaqiyatli o'chirildi",
+        message: "Shartnoma muvaffaqiyatli o'chirildi (tiklash mumkin)",
         contractId: contract._id,
         revertedAmount: totalPaidAmount,
+        deleteType: "soft",
       };
     } catch (error) {
-      logger.error("❌ === CONTRACT DELETE FAILED ===");
+      logger.error("❌ === CONTRACT SOFT DELETE FAILED ===");
+      throw error;
+    }
+  }
+
+  /**
+   * Hard delete contract (PERMANENT - Admin & Moderator only)
+   * ⚠️ WARNING: This action is IRREVERSIBLE!
+   * Requirements: DELETE_CONTRACT permission + (Admin OR Moderator role)
+   */
+  async hardDeleteContract(contractId: string, user: IJwtUser) {
+    try {
+      logger.debug("🔥 === CONTRACT HARD DELETE STARTED ===");
+      logger.debug(`Contract ID: ${contractId}`);
+
+      // 1. Find contract (including soft deleted ones)
+      const contract = await Contract.findById(contractId).populate("customer");
+      if (!contract) {
+        throw BaseError.NotFoundError("Shartnoma topilmadi");
+      }
+
+      // 2. Check user role - only Admin and Moderator can hard delete
+      const employee = await Employee.findById(user.sub).populate("role");
+      const roleName = (employee?.role as any)?.name;
+      const canHardDelete = roleName === "admin" || roleName === "moderator";
+
+      logger.debug(`👤 User role: ${roleName}, canHardDelete: ${canHardDelete}`);
+
+      if (!canHardDelete) {
+        throw BaseError.ForbiddenError(
+          "Butunlay o'chirish uchun Admin yoki Moderator huquqi kerak!"
+        );
+      }
+
+      // 3. Calculate total paid amount (if not already reverted from soft delete)
+      const Payment = (await import("../../schemas/payment.schema")).default;
+      const paidPayments = await Payment.find({
+        _id: { $in: contract.payments },
+        isPaid: true,
+        isDeleted: false, // Only count payments not already soft deleted
+      });
+
+      let totalPaidAmount = 0;
+      for (const payment of paidPayments) {
+        totalPaidAmount += payment.actualAmount || payment.amount || 0;
+      }
+
+      logger.debug(`💰 Total paid amount to revert: $${totalPaidAmount}`);
+
+      // 4. Revert balance if not already reverted
+      if (totalPaidAmount > 0 && !contract.isDeleted) {
+        const managerId = (contract.createBy as any)?._id || contract.createBy || user.sub;
+        await contractBalanceHelper.revertBalance(managerId, {
+          dollar: totalPaidAmount,
+          sum: 0,
+        });
+        logger.debug(`✅ Balance reverted: -$${totalPaidAmount} from manager ${managerId}`);
+      }
+
+      // 5. HARD DELETE: Remove all related data from database
+      const Notes = (await import("../../schemas/notes.schema")).default;
+      const { Debtor } = await import("../../schemas/debtor.schema");
+
+      // Delete all payments permanently
+      await Payment.deleteMany({ _id: { $in: contract.payments } });
+      logger.debug(`✅ Deleted ${contract.payments.length} payments permanently`);
+
+      // Delete all debtors permanently
+      const deletedDebtors = await Debtor.deleteMany({ contractId: contractId });
+      logger.debug(`✅ Deleted ${deletedDebtors.deletedCount} debtors permanently`);
+
+      // Delete notes permanently
+      if (contract.notes) {
+        await Notes.findByIdAndDelete(contract.notes);
+        logger.debug(`✅ Deleted notes permanently`);
+      }
+
+      // 6. Audit log BEFORE deleting contract
+      const customerData = contract.customer as any;
+      const employeeName = employee ? `${employee.firstName} ${employee.lastName}` : "Unknown";
+      
+      await auditLogService.logContractDelete(
+        contractId,
+        customerData._id.toString(),
+        customerData.fullName,
+        contract.productName,
+        user.sub,
+        employeeName,
+        `${roleName} (HARD DELETE)`
+      );
+
+      // 7. Delete contract permanently from database
+      await Contract.findByIdAndDelete(contractId);
+      logger.debug("🔥 Contract PERMANENTLY deleted from database");
+
+      logger.debug("🎉 === CONTRACT HARD DELETE COMPLETED ===");
+      return {
+        message: "Shartnoma butunlay o'chirildi (tiklab bo'lmaydi!)",
+        contractId: contractId,
+        revertedAmount: totalPaidAmount,
+        deleteType: "hard",
+        deletedBy: employeeName,
+        deletedRole: roleName,
+      };
+    } catch (error) {
+      logger.error("❌ === CONTRACT HARD DELETE FAILED ===");
       throw error;
     }
   }

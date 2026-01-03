@@ -8,13 +8,10 @@ class FileController {
     try {
       const { type, filename } = req.params;
 
-      // Validate file type
       const allowedTypes = ["passport", "shartnoma", "photo"];
       if (!allowedTypes.includes(type)) {
         throw BaseError.BadRequest("Noto'g'ri fayl turi");
       }
-
-      // Build file path
       const filePath = path.join(__dirname, "../../../uploads", type, filename);
 
       // Check if file exists

@@ -68,16 +68,7 @@ class ContractController {
     }
   }
 
-  /**
-   * Shartnomani yangilash
-   * Requirements: 10.1, 10.2, 10.3, 10.4
-   *
-   * Bu metod shartnoma ma'lumotlarini yangilaydi va barcha ta'sirlarni qaytaradi:
-   * - Request body validatsiya
-   * - Service chaqirish
-   * - Success response formatlash
-   * - Error handling va logging
-   */
+
   async update(req: Request, res: Response, next: NextFunction) {
     try {
       const user = req.user;
@@ -210,6 +201,33 @@ class ContractController {
       res.status(200).json({
         success: true,
         message: result.message,
+        data: result,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+  async hardDeleteContract(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      const user = req.user;
+
+      if (!user) {
+        return next(
+          BaseError.UnauthorizedError(
+            "Foydalanuvchi autentifikatsiya qilinmagan"
+          )
+        );
+      }
+
+      const result = await contractService.hardDeleteContract(id, user);
+
+      res.status(200).json({
+        success: true,
+        message: result.message,
+        data: result,
         timestamp: new Date().toISOString(),
       });
     } catch (error) {

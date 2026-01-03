@@ -13,7 +13,11 @@ export const updatePaymentDate = async (req: Request, res: Response) => {
             });
         }
 
-        const contract = await Contract.findById(contractId);
+        const contract = await Contract.findOne({ 
+            _id: contractId, 
+            isDeleted: false,
+            isActive: true 
+        });
 
         if (!contract) {
             return res.status(404).json({
@@ -36,7 +40,6 @@ export const updatePaymentDate = async (req: Request, res: Response) => {
             contract,
         });
     } catch (error) {
-        logger.error("To'lov sanasini o'zgartirishda xatolik:", error);
         return res.status(500).json({
             success: false,
             message: "Server xatosi",

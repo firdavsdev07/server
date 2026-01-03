@@ -95,7 +95,7 @@ class CustomerController {
 
   async update(req: Request, res: Response, next: NextFunction) {
     try {
-      const user = req.user; // ✅ User ma'lumotini olish
+      const user = req.user;
       const customerData = plainToInstance(UpdateCustomerDto, req.body || {});
       const errors = await validate(customerData);
       if (errors.length > 0) {

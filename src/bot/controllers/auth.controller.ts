@@ -9,14 +9,12 @@ import { profile } from "console";
 import { checkTelegramInitData } from "../utils/checkInitData";
 import config from "../utils/config";
 import logger from "../../utils/logger";
-// import jwt from "jsonwebtoken";
 import Employee from "../../schemas/employee.schema";
 import IEmployeeData from "../../types/employeeData";
 import IJwtUser from "../../types/user";
 import jwt from "../../utils/jwt";
 
 class AuthController {
-  // Check if user is registered (has phone number)
   async checkRegistration(req: Request, res: Response, next: NextFunction) {
     try {
       const { initData } = req.body;
@@ -58,7 +56,6 @@ class AuthController {
 
   async telegram(req: Request, res: Response, next: NextFunction) {
     try {
-      logger.debug("Request body:", JSON.stringify(req.body).substring(0, 100));
 
       const { initData } = req.body;
 

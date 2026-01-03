@@ -16,16 +16,11 @@ bot.command("speed", async (ctx) => {
 });
 
 bot.start(async (ctx) => {
-  console.log("📥 /start command received from:", ctx.from?.id);
   try {
     if (ctx.chat.type === "private") {
-      console.log("🚀 /start buyrug'i boshlandi, entering start scene...");
       await ctx.scene.enter("start");
-      console.log("✅ Successfully entered start scene");
     }
   } catch (error) {
-    console.error("❌ Start command error:", error);
-    logger.error("❌ Start command error:", error);
     await ctx.reply("❌ Xatolik yuz berdi. Qayta urinib ko'ring.");
   }
 });

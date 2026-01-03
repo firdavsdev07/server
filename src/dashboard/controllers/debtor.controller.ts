@@ -47,7 +47,6 @@ class DebtorController {
         });
       }
 
-      // ❌ payDebt metodi o'chirildi, paymentService.update() ishlatiladi
       const paymentService = (await import("../services/payment.service"))
         .default;
       const data = await paymentService.update(

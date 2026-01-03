@@ -21,10 +21,7 @@ phoneScene.enter(async (ctx) => {
         .oneTime()
     );
 
-    console.log("✅ Telefon raqam so'rash xabari yuborildi");
-    logger.debug(" Telefon raqam so'rash xabari yuborildi");
   } catch (err: any) {
-    console.error("❌ Phone scene enter error:", err.message);
     logger.debug(" Phone scene enter error:", err.message);
   }
 });
@@ -87,7 +84,6 @@ phoneScene.on("contact", async (ctx) => {
 
       logger.debug("=".repeat(60) + "\n");
     } else {
-      logger.debug("   - Qidirilgan raqam:", phoneNumber);
 
       const allEmployees = await Employee.find({
         isDeleted: false,
@@ -109,7 +105,6 @@ phoneScene.on("contact", async (ctx) => {
       );
     }
   } catch (e: any) {
-    logger.debug("❌ PHONE SCENE ERROR:", e.message);
     logger.debug("Stack:", e.stack);
 
     await ctx.reply(
@@ -120,7 +115,6 @@ phoneScene.on("contact", async (ctx) => {
 
 phoneScene.on("text", async (ctx) => {
   try {
-    logger.debug("⚠️ Text yuborildi, telefon tugmasini ko'rsatish");
 
     await ctx.reply(
       "⚠️ Iltimos, telefon raqamingizni tugma orqali yuboring:",
@@ -131,7 +125,7 @@ phoneScene.on("text", async (ctx) => {
         .oneTime()
     );
   } catch (e: any) {
-    logger.debug("❌ Text handler error:", e.message);
+    logger.debug("Text handler error:", e.message);
   }
 });
 

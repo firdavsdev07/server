@@ -38,7 +38,6 @@ class PaymentController {
     try {
       const { customerId, contractId, status, paymentType, dateFrom, dateTo, isPaid } = req.query;
 
-      // ✅ C3: Parse filters from query params
       const filters: any = {};
 
       if (status) {
@@ -80,9 +79,6 @@ class PaymentController {
       const user = req.user;
       const { paymentId, amount, notes, currencyDetails, currencyCourse } = req.body;
 
-      logger.debug("💰 === PAY REMAINING (DASHBOARD) ===");
-      logger.debug("Payment ID:", paymentId);
-      logger.debug("Amount:", amount);
 
       // Validation
       if (!paymentId) {
@@ -106,7 +102,7 @@ class PaymentController {
 
       res.status(200).json(data);
     } catch (error) {
-      logger.error("❌ Error in payRemaining:", error);
+      logger.error(" Error in payRemaining:", error);
       return next(error);
     }
   }
@@ -117,30 +113,16 @@ class PaymentController {
       const { contractId, amount, notes, currencyDetails, currencyCourse } =
         req.body;
 
-      logger.debug("📥 payByContract request:", {
-        contractId,
-        amount,
-        notes,
-        currencyDetails,
-        currencyCourse,
-        user: user?.name,
-      });
 
-      // ✅ TEMPORARY FIX: Agar notes'da [PAY_REMAINING:paymentId] bo'lsa, payRemaining'ni chaqiramiz
       if (notes && notes.includes("[PAY_REMAINING:")) {
-        logger.debug("🔍 Checking for PAY_REMAINING tag in notes:", notes);
         const match = notes.match(/\[PAY_REMAINING:([^\]]+)\]/);
-        logger.debug("🔍 Regex match result:", match);
+      
 
         if (match && match[1]) {
           const paymentId = match[1];
           const cleanNotes = notes.replace(/\[PAY_REMAINING:[^\]]+\]\s*/, "");
 
-          logger.debug("💰 ✅ Detected PAY_REMAINING request:", {
-            paymentId,
-            amount,
-            cleanNotes,
-          });
+      
 
           const data = await paymentService.payRemaining(
             {
@@ -155,10 +137,10 @@ class PaymentController {
 
           return res.status(200).json(data);
         } else {
-          logger.debug("❌ PAY_REMAINING tag found but regex didn't match");
+          logger.debug(" PAY_REMAINING tag found but regex didn't match");
         }
       } else {
-        logger.info("ℹ️ No PAY_REMAINING tag in notes, proceeding with normal payment");
+        logger.info("ℹNo PAY_REMAINING tag in notes, proceeding with normal payment");
       }
 
       // Batafsil validatsiya
@@ -174,7 +156,7 @@ class PaymentController {
       if (!currencyCourse || currencyCourse <= 0) validationErrors.push("currencyCourse noto'g'ri");
 
       if (validationErrors.length > 0) {
-        logger.error("❌ payByContract validation failed:", {
+        logger.error("payByContract validation failed:", {
           errors: validationErrors,
           receivedData: {
             contractId,
@@ -262,22 +244,12 @@ class PaymentController {
 
   async payAllRemainingMonths(req: Request, res: Response, next: NextFunction) {
     try {
-      logger.debug("🎯 payAllRemainingMonths CALLED!");
-      logger.debug("📦 Request body:", req.body);
-      logger.debug("👤 Request user:", req.user);
+
 
       const user = req.user;
       const { contractId, amount, notes, currencyDetails, currencyCourse } =
         req.body;
 
-      logger.debug("📥 payAllRemainingMonths request:", {
-        contractId,
-        amount,
-        notes,
-        currencyDetails,
-        currencyCourse,
-        user: user?.name,
-      });
 
       // Agar user yo'q bo'lsa
       if (!user) {
@@ -327,20 +299,15 @@ class PaymentController {
     }
   }
 
-  /**
-   * ✅ YANGI: PENDING to'lovlarni tekshirish va muddati o'tganlarni rad etish
-   */
   async checkAndRejectExpiredPayments(
     req: Request,
     res: Response,
     next: NextFunction
   ) {
     try {
-      logger.info("🕐 checkAndRejectExpiredPayments API called");
 
       const result = await paymentService.checkAndRejectExpiredPayments();
 
-      logger.debug(`✅ ${result.rejectedCount} payment(s) rejected`);
 
       res.status(200).json({
         status: "success",
@@ -348,7 +315,7 @@ class PaymentController {
         ...result,
       });
     } catch (error) {
-      logger.error("❌ Error in checkAndRejectExpiredPayments:", error);
+      logger.error(" Error in checkAndRejectExpiredPayments:", error);
       return next(error);
     }
   }

@@ -67,6 +67,17 @@ router.delete(
 );
 
 // ========================================
+// 🔥 HARD DELETE CONTRACT (PERMANENT)
+// ONLY: admin, moderator
+// ⚠️ WARNING: This action is IRREVERSIBLE!
+// ========================================
+router.delete(
+  "/hard-delete/:id",
+  checkPermission(Permission.DELETE_CONTRACT),
+  contractController.hardDeleteContract
+);
+
+// ========================================
 // 📅 CONTRACT DATE EDIT ROUTES
 // ONLY: admin, moderator
 // ========================================

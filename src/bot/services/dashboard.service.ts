@@ -7,15 +7,11 @@ import { PaymentStatusEnum } from "../../enums/payment.enum";
 
 class DashboardSrvice {
   async dashboard(user: IJwtUser) {
-    console.log("📊 [Dashboard Service] Manager ID:", user.sub);
-    
-    // Valyuta kursini olish
     const currencyCourse = await CurrencyCourse.findOne().sort({
       createdAt: -1,
     });
     const exchangeRate = currencyCourse?.amount || 12500;
 
-    // 1️⃣ BALANS - Manager'ning umumiy balansi
     const balance = await Balance.aggregate([
       {
         $match: {
@@ -34,7 +30,6 @@ class DashboardSrvice {
       },
     ]);
 
-    console.log("📊 [Dashboard Service] Balance found:", balance);
 
     const defaultBalance = {
       dollar: 0,
@@ -43,7 +38,6 @@ class DashboardSrvice {
 
     const balanceData = balance.length > 0 ? balance[0] : defaultBalance;
 
-    // 2️⃣ BUGUNGI TO'LOVLAR - Faqat bugun PAID statusdagi to'lovlar
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
@@ -77,7 +71,6 @@ class DashboardSrvice {
       }
     ]);
 
-    console.log("📊 [Dashboard Service] Today payments found:", todayPayments);
 
     const todayData = todayPayments.length > 0 ? {
       dollar: todayPayments[0].totalDollar || 0,
@@ -94,7 +87,6 @@ class DashboardSrvice {
       today: todayData
     };
 
-    console.log("📊 [Dashboard Service] Returning data:", result);
 
     return {
       status: "success",

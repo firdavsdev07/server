@@ -9,22 +9,17 @@ import { Types } from "mongoose";
 
 class CustomerService {
   async getAll(user: IJwtUser) {
-    logger.debug("\n👥 === GETTING ALL CUSTOMERS ===");
-    logger.debug("👤 Manager ID:", user.sub);
 
-    // Debug: Barcha mijozlarni sanash
     const totalCustomers = await Customer.countDocuments({
       isActive: true,
       isDeleted: false,
     });
-    logger.debug("📊 Total active customers:", totalCustomers);
 
     const managerCustomers = await Customer.countDocuments({
       isActive: true,
       isDeleted: false,
       manager: user.sub,
     });
-    logger.debug("📊 Manager's customers:", managerCustomers);
 
     const customers = await Customer.find({
       isActive: true,
@@ -32,15 +27,13 @@ class CustomerService {
       manager: user.sub,
     }).select("fullName _id phoneNumber");
 
-    logger.debug(`✅ Found ${customers.length} customers for manager`);
 
     if (customers.length > 0) {
-      logger.debug("📋 Sample customer:", {
+      logger.debug("Sample customer:", {
         fullName: customers[0].fullName,
         phoneNumber: customers[0].phoneNumber,
       });
     }
-    logger.debug("=".repeat(50) + "\n");
 
     return {
       status: "success",
@@ -50,30 +43,20 @@ class CustomerService {
 
   async getUnpaidDebtors(user: IJwtUser, filterDate?: string) {
     try {
-      logger.debug("\n🔍 === GETTING UNPAID DEBTORS ===");
-      logger.debug(`👤 Manager ID: ${user.sub}`);
-      logger.debug(`📅 Filter date param: ${filterDate || 'none (using today)'}`);
-
-      // ✅ Sodda logika: sana berilgan bo'lsa ishlatamiz, yo'q bo'lsa bugungi kun
       let filterEndDate: Date;
       
       if (filterDate && filterDate.trim() !== "") {
-        // Sana formatini parse qilish: "YYYY-MM-DD"
         const [year, month, day] = filterDate.split('-').map(Number);
         filterEndDate = new Date(year, month - 1, day, 23, 59, 59, 999);
-        logger.debug(`📅 Using filter date: ${filterDate} -> ${filterEndDate.toISOString()}`);
       } else {
         // Default: bugungi kun
         filterEndDate = new Date();
         filterEndDate.setHours(23, 59, 59, 999);
-        logger.debug(`📅 Using today: ${filterEndDate.toISOString()}`);
       }
 
       const managerId = new Types.ObjectId(user.sub);
 
-      // ✅ WEB BILAN BIR XIL LOGIKA: nextPaymentDate tekshirish
       const result = await Contract.aggregate([
-        // 1️⃣ Faol shartnomalarni filtrlash
         {
           $match: {
             isActive: true,
@@ -82,7 +65,6 @@ class CustomerService {
           },
         },
         
-        // 2️⃣ Mijozlarni join qilish
         {
           $lookup: {
             from: "customers",
@@ -93,7 +75,6 @@ class CustomerService {
         },
         { $unwind: { path: "$customerData", preserveNullAndEmptyArrays: false } },
         
-        // 3️⃣ Faqat o'z menejerining mijozlari
         {
           $match: {
             "customerData.manager": managerId,
@@ -102,7 +83,6 @@ class CustomerService {
           },
         },
         
-        // 4️⃣ To'lovlarni join qilish
         {
           $lookup: {
             from: "payments",
@@ -112,7 +92,6 @@ class CustomerService {
           },
         },
         
-        // 5️⃣ ✅ MUHIM FIX: nextPaymentDate mavjud va o'tgan bo'lsa → qarzdor
         {
           $match: {
             nextPaymentDate: { 
@@ -123,7 +102,6 @@ class CustomerService {
           }
         },
         
-        // 6️⃣ To'langan summani va to'langan oylarni hisoblash
         {
           $addFields: {
             totalPaid: {
@@ -158,7 +136,6 @@ class CustomerService {
           },
         },
         
-        // 7️⃣ Qolgan qarzni hisoblash
         {
           $addFields: {
             remainingDebt: {
@@ -178,40 +155,35 @@ class CustomerService {
           }
         },
         
-        // 8️⃣ Faqat qarzi bor shartnomalar
         {
           $match: { remainingDebt: { $gt: 0 } }
         },
         
-        // 9️⃣ ✅ YANGI: Har bir shartnomani alohida qaytarish (mijoz bo'yicha guruhlash yo'q)
-        // Bu orqali bir mijozning bir necha shartnomasi alohida ko'rinadi
         {
           $project: {
             _id: "$_id", // Contract ID
             customerId: "$customerData._id",
             fullName: "$customerData.fullName",
             phoneNumber: "$customerData.phoneNumber",
-            productName: "$productName", // ✅ Shartnoma nomi
-            contractId: "$_id", // ✅ Shartnoma ID (click uchun)
-            remainingDebt: "$remainingDebt", // ✅ Shu shartnomaning qarzi
-            delayDays: "$delayDays", // ✅ Shu shartnomaning kechikishi
+            productName: "$productName", 
+            contractId: "$_id", 
+            remainingDebt: "$remainingDebt", 
+            delayDays: "$delayDays",
             nextPaymentDate: "$nextPaymentDate",
             totalPrice: { $ifNull: ["$totalPrice", "$price"] },
             totalPaid: "$totalPaid",
-            startDate: "$startDate", // ✅ KUN uchun kerak!
-            period: "$period", // ✅ YANGI: Shartnoma muddati (9 oy)
-            paidMonthsCount: "$paidMonthsCount", // ✅ YANGI: To'langan oylar (2 oy)
+            startDate: "$startDate", 
+            period: "$period", 
+            paidMonthsCount: "$paidMonthsCount", 
           },
         },
         
-        // 🔟 Tartiblash: Eng ko'p kechikkan shartnoma birinchi
         { $sort: { delayDays: -1, remainingDebt: -1 } },
       ]);
 
-      logger.debug(`✅ Found ${result.length} debtors`);
       
       if (result.length > 0) {
-        logger.debug(`📊 Sample debtor:`, {
+        logger.debug(` Sample debtor:`, {
           name: result[0].fullName,
           totalDebt: result[0].totalDebt,
           delayDays: result[0].delayDays,
@@ -221,15 +193,12 @@ class CustomerService {
       
       return { status: "success", data: result };
     } catch (error) {
-      logger.error("❌ getUnpaidDebtors error:", error);
       throw BaseError.InternalServerError(String(error));
     }
   }
 
   async getPaidDebtors(user: IJwtUser) {
     try {
-      logger.debug("\n💰 === GETTING CUSTOMERS WITH RECENT PAYMENTS ===");
-      logger.debug("👤 Manager ID:", user.sub);
 
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -333,16 +302,13 @@ class CustomerService {
 
       return { status: "success", data: result };
     } catch (error) {
-      logger.error("❌ Error getting paid debtors:", error);
       throw BaseError.InternalServerError(String(error));
     }
   }
 
   async getById(user: IJwtUser, customerId: string) {
     try {
-      logger.debug("\n🔍 === GET CUSTOMER BY ID ===");
-      logger.debug("📋 Customer ID:", customerId);
-      logger.debug("👤 Manager ID:", user.sub);
+
 
       const customerData = await Customer.aggregate([
         {
@@ -356,8 +322,20 @@ class CustomerService {
         {
           $lookup: {
             from: "contracts",
-            localField: "_id",
-            foreignField: "customer",
+            let: { customerId: "$_id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$customer", "$$customerId"] },
+                      { $eq: ["$isDeleted", false] },
+                      { $eq: ["$isActive", true] }
+                    ]
+                  }
+                }
+              }
+            ],
             as: "contracts",
           },
         },
@@ -370,7 +348,7 @@ class CustomerService {
                 $match: {
                   $expr: {
                     $and: [
-                      { $eq: ["$customerId", "$$customerId"] }, // ✅ TUZATILDI: $$ ishlatildi
+                      { $eq: ["$customerId", "$$customerId"] }, 
                       { $eq: ["$isPaid", true] },
                     ],
                   },
@@ -411,7 +389,7 @@ class CustomerService {
               {
                 $match: {
                   $expr: {
-                    $in: ["$contractId", "$$contractIds"], // ✅ TUZATILDI: $$ ishlatildi
+                    $in: ["$contractId", "$$contractIds"], 
                   },
                 },
               },
@@ -436,10 +414,10 @@ class CustomerService {
                   as: "debtor",
                   in: {
                     $cond: [
-                      { $lt: ["$$debtor.dueDate", new Date()] }, // ✅ TUZATILDI: $$ ishlatildi
+                      { $lt: ["$$debtor.dueDate", new Date()] }, 
                       {
                         $dateDiff: {
-                          startDate: "$$debtor.dueDate", // ✅ TUZATILDI: $$ ishlatildi
+                          startDate: "$$debtor.dueDate", 
                           endDate: new Date(),
                           unit: "day",
                         },
@@ -465,23 +443,14 @@ class CustomerService {
         },
       ]);
 
-      logger.debug("📊 Customer data found:", customerData.length);
 
       if (!customerData.length) {
-        logger.debug("❌ Customer not found or not accessible");
         throw BaseError.NotFoundError(
           "Mijoz topilmadi yoki sizga tegishli emas"
         );
       }
 
-      logger.debug("✅ Customer details:", {
-        fullName: customerData[0].fullName,
-        phoneNumber: customerData[0].phoneNumber,
-        totalDebt: customerData[0].totalDebt,
-        totalPaid: customerData[0].totalPaid,
-        remainingDebt: customerData[0].remainingDebt,
-      });
-      logger.debug("=".repeat(50) + "\n");
+     
 
       return {
         status: "success",
@@ -493,8 +462,7 @@ class CustomerService {
   }
 
   async getCustomerContracts(customerId: string) {
-    logger.debug("\n🔍 === GET CUSTOMER CONTRACTS ===");
-    logger.debug("👤 Customer ID:", customerId);
+
 
     const allContracts = await Contract.aggregate([
       {
@@ -522,13 +490,11 @@ class CustomerService {
                     input: "$paymentDetails",
                     as: "p",
                     cond: {
-                      // ✅ TUZATISH #13: Faqat to'liq to'langan to'lovlar (PENDING EMAS!)
                       $eq: ["$$p.isPaid", true]
                     },
                   },
                 },
                 as: "pp",
-                // ✅ TUZATISH: Har doim `actualAmount` ishlatish, eski to'lovlar uchun `amount`ga qaytish
                 in: { $ifNull: ["$$pp.actualAmount", "$$pp.amount"] },
               },
             },
@@ -557,7 +523,7 @@ class CustomerService {
           postponedAt: 1,
           isPostponedOnce: 1,
           originalPaymentDay: 1,
-          durationMonths: "$period", // ✅ period -> durationMonths
+          durationMonths: "$period", 
           payments: {
             $map: {
               input: "$paymentDetails",
@@ -574,7 +540,7 @@ class CustomerService {
                 excessAmount: "$$payment.excessAmount",
                 expectedAmount: "$$payment.expectedAmount",
                 targetMonth: "$$payment.targetMonth",
-                reminderDate: "$$payment.reminderDate", // ✅ YANGI - Eslatma sanasi
+                reminderDate: "$$payment.reminderDate", 
               },
             },
           },
@@ -585,7 +551,6 @@ class CustomerService {
                 as: "p",
                 cond: {
                   $and: [
-                    // ✅ TUZATISH #13: Faqat to'liq to'langan to'lovlar (PENDING EMAS!)
                     { $eq: ["$$p.isPaid", true] },
                     { $eq: ["$$p.paymentType", "monthly"] }
                   ],
@@ -593,7 +558,6 @@ class CustomerService {
               },
             },
           },
-          // ✅ YANGI: Shartnoma tugallanganligini hisoblash
           isCompleted: {
             $gte: [
               {
@@ -617,15 +581,25 @@ class CustomerService {
       },
     ]);
 
-    // ✅ Production uchun minimal logging
-    logger.debug(`📋 Contracts found: ${allContracts.length} for customer: ${customerId}`);
 
     const debtorContractsRaw = await Debtor.aggregate([
       {
         $lookup: {
           from: "contracts",
-          localField: "contractId",
-          foreignField: "_id",
+          let: { contractId: "$contractId" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$_id", "$$contractId"] },
+                    { $eq: ["$isDeleted", false] },
+                    { $eq: ["$isActive", true] }
+                  ]
+                }
+              }
+            }
+          ],
           as: "contract",
         },
       },
@@ -690,7 +664,7 @@ class CustomerService {
           nextPaymentDate: "$contract.nextPaymentDate",
           previousPaymentDate: "$contract.previousPaymentDate",
           postponedAt: "$contract.postponedAt",
-          debtorId: "$debtorId", // ✅ TUZATISH: $addFields'dan olingan debtorId
+          debtorId: "$debtorId", 
           isPaid: 1,
           paidMonthsCount: {
             $size: {
@@ -699,7 +673,6 @@ class CustomerService {
                 as: "p",
                 cond: {
                   $and: [
-                    // ✅ TUZATISH #13: Faqat to'liq to'langan to'lovlar (PENDING EMAS!)
                     { $eq: ["$$p.isPaid", true] },
                     { $eq: ["$$p.paymentType", "monthly"] }
                   ],
@@ -707,7 +680,7 @@ class CustomerService {
               },
             },
           },
-          durationMonths: "$contract.period", // ✅ period -> durationMonths
+          durationMonths: "$contract.period", 
           payments: {
             $map: {
               input: "$paymentDetails",
@@ -724,7 +697,7 @@ class CustomerService {
                 excessAmount: "$$payment.excessAmount",
                 expectedAmount: "$$payment.expectedAmount",
                 targetMonth: "$$payment.targetMonth",
-                reminderDate: "$$payment.reminderDate", // ✅ YANGI - Eslatma sanasi
+                reminderDate: "$$payment.reminderDate",
               },
             },
           },
@@ -732,9 +705,6 @@ class CustomerService {
       },
     ]);
 
-    logger.debug(`📋 Debtor Contracts: ${debtorContractsRaw.length}`);
-
-    // ✅ YANGI: Shartnomalarni tugallanganlik bo'yicha kategoriyalash
     const completedContracts = allContracts.filter((c) => c.isCompleted === true);
     const activeContracts = allContracts.filter((c) => c.isCompleted === false);
 
@@ -743,7 +713,6 @@ class CustomerService {
       (c) => c.isPaid === false
     );
 
-    logger.debug(`✅ Response: ${allContracts.length} all, ${paidContracts.length} paid, ${debtorContracts.length} debtor contracts`);
 
     const response = {
       status: "success",

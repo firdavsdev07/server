@@ -1,7 +1,4 @@
-/**
- * Contract Date Controller
- * Shartnoma sanasini o'zgartirish endpoints
- */
+
 
 import { Request, Response, NextFunction } from "express";
 import contractDateHandler from "../services/contract/contract.date.handler";
@@ -9,14 +6,9 @@ import BaseError from "../../utils/base.error";
 import logger from "../../utils/logger";
 
 class ContractDateController {
-  /**
-   * POST /api/contract/update-start-date
-   * Shartnoma boshlanish sanasini o'zgartirish
-   * ONLY: admin, moderator
-   */
+
   async updateStartDate(req: Request, res: Response, next: NextFunction) {
     try {
-      logger.info("📅 updateStartDate endpoint called");
 
       const { contractId, newStartDate, reason } = req.body;
 
@@ -40,19 +32,14 @@ class ContractDateController {
 
       res.status(200).json(result);
     } catch (error) {
-      logger.error("❌ Error in updateStartDate:", error);
+      logger.error(" Error in updateStartDate:", error);
       next(error);
     }
   }
 
-  /**
-   * POST /api/contract/preview-date-change
-   * Shartnoma sanasi o'zgarishining ta'sirini ko'rish
-   * ONLY: admin, moderator
-   */
+
   async previewDateChange(req: Request, res: Response, next: NextFunction) {
     try {
-      logger.info("👁️ previewDateChange endpoint called");
 
       const { contractId, newStartDate } = req.body;
 
@@ -67,7 +54,7 @@ class ContractDateController {
 
       res.status(200).json(result);
     } catch (error) {
-      logger.error("❌ Error in previewDateChange:", error);
+      logger.error("Error in previewDateChange:", error);
       next(error);
     }
   }
