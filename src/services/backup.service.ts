@@ -60,12 +60,28 @@ class BackupService {
       if (this.telegramChannelId) {
         await this.sendToTelegram(excelFilePath);
         this.lastBackupHash = fileHash;
+        
+        // ✅ Telegram'ga yuborilgandan keyin faylni o'chirish
+        try {
+          if (fs.existsSync(excelFilePath)) {
+            fs.unlinkSync(excelFilePath);
+            logger.debug("🗑️ Excel backup file deleted after upload:", path.basename(excelFilePath));
+          }
+        } catch (deleteError: any) {
+          logger.warn("⚠️ Failed to delete backup file:", deleteError.message);
+        }
       } else {
         logger.warn("⚠️ TELEGRAM_CHAT_ID not set, backup saved locally only");
       }
       
-      // 5. Eski export'larni tozalash
-      await excelExportService.cleanOldExports();
+      // 5. Eski export'larni tozalash (agar Telegram'ga yuborilmasa, local'da saqlanadi)
+      if (this.telegramChannelId) {
+        // Telegram'ga yuborilsa, barcha eski fayllarni o'chirish
+        await this.cleanAllExports();
+      } else {
+        // Telegram'ga yuborilmasa, faqat oxirgi 5 tasini saqlash
+        await excelExportService.cleanOldExports();
+      }
       
       return {
         success: true,
@@ -138,6 +154,37 @@ class BackupService {
     } catch (error: any) {
       logger.error("❌ Failed to send backup to Telegram:", error.message);
       throw error;
+    }
+  }
+
+  /**
+   * Barcha eski export fayllarni o'chirish (Telegram'ga yuborilgandan keyin)
+   */
+  private async cleanAllExports(): Promise<void> {
+    try {
+      const exportDir = path.join(process.cwd(), "exports");
+      
+      if (!fs.existsSync(exportDir)) {
+        return;
+      }
+      
+      const files = fs.readdirSync(exportDir)
+        .filter(file => file.endsWith(".xlsx"))
+        .map(file => path.join(exportDir, file));
+      
+      for (const file of files) {
+        try {
+          fs.unlinkSync(file);
+        } catch (err) {
+          // Ignore errors
+        }
+      }
+      
+      if (files.length > 0) {
+        logger.debug(`🧹 Cleaned all ${files.length} backup file(s) from exports/`);
+      }
+    } catch (error: any) {
+      logger.error("❌ Failed to clean exports:", error.message);
     }
   }
 
