@@ -138,7 +138,7 @@ class PaymentController {
         });
       }
 
-      const { contractId, targetMonth, reminderDate } = req.body;
+      const { contractId, targetMonth, reminderDate, reminderComment } = req.body;
 
     
 
@@ -162,7 +162,8 @@ class PaymentController {
         contractId,
         targetMonthNumber,
         reminderDate,
-        user
+        user,
+        reminderComment
       );
 
       res.status(200).json(result);

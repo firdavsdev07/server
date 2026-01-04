@@ -403,7 +403,8 @@ class PaymentService {
     contractId: string,
     targetMonth: number,
     reminderDate: string,
-    user: IJwtUser
+    user: IJwtUser,
+    reminderComment?: string
   ) {
     try {
 
@@ -483,6 +484,7 @@ class PaymentService {
           expectedAmount: contract.monthlyPayment,
           targetMonth: targetMonth,
           reminderDate: reminder,
+          reminderComment: reminderComment || null,
         });
 
         // Contract'ga payment qo'shish
@@ -499,6 +501,7 @@ class PaymentService {
         paymentId = (payment as any)._id;
         await Payment.findByIdAndUpdate(paymentId, {
           reminderDate: reminder,
+          reminderComment: reminderComment || null,
         });
 
       }
