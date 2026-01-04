@@ -492,8 +492,11 @@ class PaymentService {
           (reminder.getTime() - paymentDueDate.getTime()) / (1000 * 60 * 60 * 24)
         );
         
+        // ✅ YANGI: Faqat manager izohi (agar bor bo'lsa)
+        const notesText = reminderComment || 'Eslatma (izoh yo\'q)';
+        
         const reminderNotes = new Notes({
-          text: `${targetMonth}-oy to'lovi ${postponedDays} kunga kechiktirildi. Izoh: ${reminderComment || 'Izoh yo\'q'}`,
+          text: notesText,
           customer: customer._id,
           createBy: user.sub,
         });
@@ -507,7 +510,7 @@ class PaymentService {
           paymentType: PaymentType.MONTHLY,
           notes: reminderNotes._id,
           customerId: customer._id,
-          managerId: manager._id,
+          managerId: user.sub,
           status: PaymentStatus.PENDING,
           expectedAmount: 0,
           targetMonth: targetMonth,
@@ -540,8 +543,11 @@ class PaymentService {
           (reminder.getTime() - paymentDate.getTime()) / (1000 * 60 * 60 * 24)
         );
         
+        // ✅ YANGI: Faqat manager izohi (agar bor bo'lsa)
+        const notesText = reminderComment || 'Eslatma (izoh yo\'q)';
+        
         const reminderNotes = new Notes({
-          text: `${targetMonth}-oy to'lovi ${postponedDays} kunga kechiktirildi. Izoh: ${reminderComment || 'Izoh yo\'q'}`,
+          text: notesText,
           customer: customer._id,
           createBy: user.sub,
         });
