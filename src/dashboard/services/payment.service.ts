@@ -1016,16 +1016,12 @@ class PaymentService {
         logger.debug(`⚠️ Still UNDERPAID: ${newRemainingAmount} $ remaining`);
       }
 
-      // ✅ TUZATISH: Bot'dan kelgan to'lovlar PENDING statusda saqlanishi kerak
-      // Kassa tasdiqlashidan o'tishi kerak
-      const isFromBot = user.role === RoleEnum.MANAGER || user.role === RoleEnum.SELLER;
-
-      if (isFromBot) {
-        // ✅ Bot'dan: PENDING statusda, kassa tasdiqlashi kerak
-        existingPayment.status = PaymentStatus.PENDING;
-        existingPayment.isPaid = false;
-        logger.info("⏳ Payment status set to PENDING (from bot, awaiting cash confirmation)");
-      }
+      // ✅ TUZATISH: Dashboard'dan to'lov qilganda DARHOL PAID bo'ladi
+      // Bot'dan kelgan to'lovlar alohida bot/services/payment.service.ts da boshqariladi
+      // Bu yerda (dashboard service) faqat Dashboard'dan keladi - ADMIN, MODERATOR, MANAGER
+      // Ularning hammasini PAID qilamiz (kassa tasdiq bermaydi, to'g'ridan-to'g'ri qabul qilinadi)
+      
+      // Hech narsa qilmaymiz - default PAID bo'ladi
 
       await existingPayment.save();
 
@@ -1041,18 +1037,12 @@ class PaymentService {
         }
       }
 
-      // ❌ TUZATISH: Bot'dan kelgan to'lovlar uchun balance yangilanmasin
-      // ✅ Faqat kassa tasdiqlashidan keyin balance yangilanadi (confirmPayment'da)
-      if (!isFromBot) {
-        // 7. Balance yangilash (faqat web/dashboard'dan)
-        await this.updateBalance(String(manager._id), {
-          dollar: payData.currencyDetails.dollar || 0,
-          sum: payData.currencyDetails.sum || 0,
-        }, null);
-        logger.debug("✅ Balance updated (from web/dashboard)");
-      } else {
-        logger.info("⏳ Balance NOT updated (awaiting cash confirmation)");
-      }
+      // 7. Balance yangilash (Dashboard service - to'g'ridan-to'g'ri yangilanadi)
+      await this.updateBalance(String(manager._id), {
+        dollar: payData.currencyDetails.dollar || 0,
+        sum: payData.currencyDetails.sum || 0,
+      }, null);
+      logger.debug("✅ Balance updated (from dashboard)");
 
       // 8. Contract topish va ortiqcha summani boshqarish
       const contract = await Contract.findOne({
@@ -1063,121 +1053,106 @@ class PaymentService {
         throw BaseError.NotFoundError("Shartnoma topilmadi");
       }
 
-      // ❌ TUZATISH: Bot'dan kelgan to'lovlar uchun bu jarayonlar BAJARILMASIN
-      // ✅ Faqat kassa tasdiqlashidan keyin bajariladi (confirmPayment'da)
-      let createdPayments: any[] = [];
+      // ✅ Ortiqcha to'lov bo'lsa, keyingi oylar uchun avtomatik to'lovlar yaratish (Dashboard)
+      const createdPayments = await this.processExcessPayment(
+        excessAmount,
+        contract,
+        existingPayment,
+        user
+      );
 
-      if (!isFromBot) {
-        // ✅ YANGI: Agar ortiqcha to'lov bo'lsa, keyingi oylar uchun avtomatik to'lovlar yaratish
-        createdPayments = await this.processExcessPayment(
-          excessAmount,
-          contract,
-          existingPayment,
-          user
+      await contract.save();
+
+      // 9. Agar to'liq to'langan bo'lsa, Debtor'ni tekshirish va yangilash/o'chirish
+      if (
+        existingPayment.status === PaymentStatus.PAID ||
+        existingPayment.status === PaymentStatus.OVERPAID
+      ) {
+        // ✅ YANGI LOGIKA: Debtor faqat barcha muddati o'tgan to'lovlar to'langanda o'chirilsin
+        const allPayments = await Payment.find({
+          _id: { $in: contract.payments },
+        });
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // Muddati o'tgan va to'lanmagan to'lovlarni hisoblash
+        const overdueUnpaidPayments = allPayments.filter(
+          (p) => !p.isPaid && new Date(p.date) < today
         );
 
-        await contract.save();
+        logger.debug("📊 Overdue unpaid payments check:", {
+          totalPayments: allPayments.length,
+          overdueUnpaid: overdueUnpaidPayments.length,
+          contractId: contract._id,
+        });
 
-        // 9. Agar to'liq to'langan bo'lsa, Debtor'ni tekshirish va yangilash/o'chirish
-        if (
-          existingPayment.status === PaymentStatus.PAID ||
-          existingPayment.status === PaymentStatus.OVERPAID
-        ) {
-          // ✅ YANGI LOGIKA: Debtor faqat barcha muddati o'tgan to'lovlar to'langanda o'chirilsin
-          const allPayments = await Payment.find({
-            _id: { $in: contract.payments },
-          });
-
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-
-          // Muddati o'tgan va to'lanmagan to'lovlarni hisoblash
-          const overdueUnpaidPayments = allPayments.filter(
-            (p) => !p.isPaid && new Date(p.date) < today
-          );
-
-          logger.debug("📊 Overdue unpaid payments check:", {
-            totalPayments: allPayments.length,
-            overdueUnpaid: overdueUnpaidPayments.length,
+        // ✅ Faqat muddati o'tgan to'lanmagan to'lovlar yo'q bo'lsa, Debtor o'chirish
+        if (overdueUnpaidPayments.length === 0) {
+          const deletedDebtors = await Debtor.deleteMany({
             contractId: contract._id,
           });
-
-          // ✅ Faqat muddati o'tgan to'lanmagan to'lovlar yo'q bo'lsa, Debtor o'chirish
-          if (overdueUnpaidPayments.length === 0) {
-            const deletedDebtors = await Debtor.deleteMany({
-              contractId: contract._id,
-            });
-            if (deletedDebtors.deletedCount > 0) {
-              logger.debug("✅ Debtor(s) deleted - no more overdue payments:", deletedDebtors.deletedCount);
-            }
-          } else {
-            logger.debug(`⚠️ Debtor NOT deleted - still has ${overdueUnpaidPayments.length} overdue unpaid payment(s)`);
-
-            // ✅ Debtor ma'lumotlarini yangilash
-            const firstOverduePayment = overdueUnpaidPayments.sort(
-              (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-            )[0];
-
-            if (firstOverduePayment) {
-              const overdueDays = Math.floor(
-                (today.getTime() - new Date(firstOverduePayment.date).getTime()) / (1000 * 60 * 60 * 24)
-              );
-
-              await Debtor.updateMany(
-                { contractId: contract._id },
-                {
-                  $set: {
-                    dueDate: firstOverduePayment.date,
-                    overdueDays: Math.max(0, overdueDays),
-                    debtAmount: firstOverduePayment.remainingAmount || firstOverduePayment.amount,
-                  },
-                }
-              );
-
-              logger.debug("✅ Debtor updated with new overdue info:", {
-                dueDate: firstOverduePayment.date,
-                overdueDays: Math.max(0, overdueDays),
-              });
-            }
+          if (deletedDebtors.deletedCount > 0) {
+            logger.debug("✅ Debtor(s) deleted - no more overdue payments:", deletedDebtors.deletedCount);
           }
+        } else {
+          logger.debug(`⚠️ Debtor NOT deleted - still has ${overdueUnpaidPayments.length} overdue unpaid payment(s)`);
 
-          // Contract completion tekshirish
-          await this.checkContractCompletion(String(contract._id));
+          // ✅ Debtor ma'lumotlarini yangilash
+          const firstOverduePayment = overdueUnpaidPayments.sort(
+            (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+          )[0];
+
+          if (firstOverduePayment) {
+            const overdueDays = Math.floor(
+              (today.getTime() - new Date(firstOverduePayment.date).getTime()) / (1000 * 60 * 60 * 24)
+            );
+
+            await Debtor.updateMany(
+              { contractId: contract._id },
+              {
+                $set: {
+                  dueDate: firstOverduePayment.date,
+                  overdueDays: Math.max(0, overdueDays),
+                  debtAmount: firstOverduePayment.remainingAmount || firstOverduePayment.amount,
+                },
+              }
+            );
+
+            logger.debug("✅ Debtor updated with new overdue info:", {
+              dueDate: firstOverduePayment.date,
+              overdueDays: Math.max(0, overdueDays),
+            });
+          }
         }
-      } else {
-        logger.info("⏳ Excess payment processing and debtor deletion will happen after cash confirmation");
+
+        // Contract completion tekshirish
+        await this.checkContractCompletion(String(contract._id));
       }
 
       logger.debug("✅ === PAY REMAINING COMPLETED ===");
 
-      // ✅ Response'da qo'shimcha ma'lumot
+      // ✅ Response message (Dashboard - to'g'ridan-to'g'ri tasdiqlangan)
       let message = "";
-
-      // ✅ Bot'dan kelgan bo'lsa - kassa tasdiqlashi kerak
-      if (isFromBot) {
-        message = "To'lov qabul qilindi, kassa tasdiqlashi kutilmoqda";
-        logger.info("⏳ Response: Payment pending cash confirmation");
-      } else {
-        // Web/Dashboard'dan - to'g'ridan-to'g'ri tasdiqlangan
-        if (excessAmount > 0.01) {
-          message = `Qolgan qarz to'liq to'landi va ${excessAmount.toFixed(
-            2
-          )} $ ortiqcha to'landi`;
-          if (createdPayments.length > 0) {
-            message += `\n✅ ${createdPayments.length} oylik to'lovlar avtomatik yaratildi`;
-          }
-          if (contract.prepaidBalance && contract.prepaidBalance > 0.01) {
-            message += `\n💰 ${contract.prepaidBalance.toFixed(
-              2
-            )} $ prepaid balance ga qo'shildi`;
-          }
-        } else if (newRemainingAmount < 0.01) {
-          message = "Qolgan qarz to'liq to'landi";
-        } else {
-          message = `Qolgan qarz qisman to'landi. Hali ${newRemainingAmount.toFixed(
-            2
-          )} $ qoldi`;
+      
+      if (excessAmount > 0.01) {
+        message = `Qolgan qarz to'liq to'landi va ${excessAmount.toFixed(
+          2
+        )} $ ortiqcha to'landi`;
+        if (createdPayments.length > 0) {
+          message += `\n✅ ${createdPayments.length} oylik to'lovlar avtomatik yaratildi`;
         }
+        if (contract.prepaidBalance && contract.prepaidBalance > 0.01) {
+          message += `\n💰 ${contract.prepaidBalance.toFixed(
+            2
+          )} $ prepaid balance ga qo'shildi`;
+        }
+      } else if (newRemainingAmount < 0.01) {
+        message = "Qolgan qarz to'liq to'landi";
+      } else {
+        message = `Qolgan qarz qisman to'landi. Hali ${newRemainingAmount.toFixed(
+          2
+        )} $ qoldi`;
       }
 
       // ✅ AUDIT LOG: Qolgan qarzni to'lash
@@ -1228,8 +1203,7 @@ class PaymentService {
       return {
         status: "success",
         message: message,
-        isPending: isFromBot, // ⏳ Bot'dan kelsa - PENDING
-        paymentId: existingPayment._id, // ✅ Bot uchun kerak
+        paymentId: existingPayment._id,
         payment: {
           _id: existingPayment._id,
           actualAmount: existingPayment.actualAmount,
@@ -1870,11 +1844,13 @@ class PaymentService {
     user: IJwtUser
   ) {
     try {
-      // ✅ Bot'dan kelganini aniqlash
-      const isFromBot = user.role === RoleEnum.MANAGER || user.role === RoleEnum.SELLER;
+      // ✅ TUZATISH: Dashboard'dan to'lov - hammasini PAID qilamiz
+      // Bot API alohida endpoint: /api/bot/payment/... (bot/services/payment.service.ts)
+      // Dashboard API: /api/payment/... (dashboard/services/payment.service.ts)
+      // ✅ Dashboard service - faqat Dashboard'dan keladi (kassaga bormasin)
 
       logger.debug("💰 === PAY ALL REMAINING MONTHS ===");
-      logger.debug("From:", isFromBot ? "BOT (Manager/Seller)" : "DASHBOARD (Admin/Kassa)");
+      logger.debug("From: DASHBOARD (Admin/Moderator/Manager)");
 
       const contract = await Contract.findById(payData.contractId).populate(
         "customer"
@@ -1980,16 +1956,16 @@ class PaymentService {
           amount: contract.monthlyPayment, // Kutilgan summa
           actualAmount: paymentAmount, // Haqiqatda to'langan summa
           date: new Date(),
-          isPaid: isFromBot ? false : true, // ✅ Bot'dan: PENDING, Dashboard: PAID
+          isPaid: true, // ✅ Dashboard - to'g'ridan-to'g'ri PAID
           paymentType: PaymentType.MONTHLY,
           customerId: contract.customer,
           managerId: String(manager._id),
           notes: notes._id,
-          status: isFromBot ? PaymentStatus.PENDING : paymentStatus, // ✅ Bot'dan: PENDING
+          status: paymentStatus, // ✅ Dashboard - to'g'ridan-to'g'ri status
           expectedAmount: contract.monthlyPayment,
           remainingAmount: shortageAmount,
-          confirmedAt: isFromBot ? undefined : new Date(), // ✅ Faqat Dashboard'dan
-          confirmedBy: isFromBot ? undefined : user.sub, // ✅ Faqat Dashboard'dan
+          confirmedAt: new Date(), // ✅ Dashboard - to'g'ridan-to'g'ri tasdiqlangan
+          confirmedBy: user.sub, // ✅ Dashboard - kim tasdiqlagan
           targetMonth: monthNumber,
         });
 
@@ -2025,59 +2001,44 @@ class PaymentService {
 
       await contract.save();
 
-      // ❌ Bot'dan kelgan to'lovlar uchun balance va debtor bilan ishlamaslik kerak
-      // ✅ Faqat Dashboard'dan kelganda bajarish
-      if (!isFromBot) {
-        // 4. Balance yangilash (faqat Dashboard'dan)
-        await this.updateBalance(String(manager._id), {
-          dollar: payData.currencyDetails.dollar || 0,
-          sum: payData.currencyDetails.sum || 0,
-        }, null);
-        logger.debug("✅ Balance updated (from dashboard)");
+      // 4. Balance yangilash (Dashboard - to'g'ridan-to'g'ri)
+      await this.updateBalance(String(manager._id), {
+        dollar: payData.currencyDetails.dollar || 0,
+        sum: payData.currencyDetails.sum || 0,
+      }, null);
+      logger.debug("✅ Balance updated (from dashboard)");
 
-        // 5. Debtor o'chirish (faqat Dashboard'dan)
-        const deletedDebtors = await Debtor.deleteMany({
-          contractId: contract._id,
-        });
-        if (deletedDebtors.deletedCount > 0) {
-          logger.debug("🗑️ Debtor(s) deleted:", deletedDebtors.deletedCount);
-        }
-
-        // 6. Contract completion tekshirish (faqat Dashboard'dan)
-        await this.checkContractCompletion(String(contract._id));
-      } else {
-        logger.info("⏳ Balance, Debtor, Contract completion - will be handled after cash confirmation");
+      // 5. Debtor o'chirish (Dashboard - to'g'ridan-to'g'ri)
+      const deletedDebtors = await Debtor.deleteMany({
+        contractId: contract._id,
+      });
+      if (deletedDebtors.deletedCount > 0) {
+        logger.debug("🗑️ Debtor(s) deleted:", deletedDebtors.deletedCount);
       }
 
-      // ✅ Response'da qo'shimcha ma'lumot qaytarish
-      let message = "";
+      // 6. Contract completion tekshirish (Dashboard - to'g'ridan-to'g'ri)
+      await this.checkContractCompletion(String(contract._id));
 
-      if (isFromBot) {
-        // Bot'dan kelgan bo'lsa
-        message = `${remainingMonths} oylik to'lovlar qabul qilindi, kassa tasdiqlashi kutilmoqda`;
-        logger.info("⏳ Response: Payments pending cash confirmation");
-      } else {
-        // Dashboard'dan kelgan bo'lsa
-        const underpaidPayments = createdPayments.filter(
-          (p) => p.status === PaymentStatus.UNDERPAID
-        );
-        const totalShortage = underpaidPayments.reduce(
-          (sum, p) => sum + (p.remainingAmount || 0),
-          0
-        );
+      // ✅ Response message (Dashboard - to'g'ridan-to'g'ri tasdiqlangan)
+      const underpaidPayments = createdPayments.filter(
+        (p) => p.status === PaymentStatus.UNDERPAID
+      );
+      const totalShortage = underpaidPayments.reduce(
+        (sum, p) => sum + (p.remainingAmount || 0),
+        0
+      );
 
-        message = `${remainingMonths} oylik to'lovlar muvaffaqiyatli amalga oshirildi`;
+      let message = `${remainingMonths} oylik to'lovlar muvaffaqiyatli amalga oshirildi`;
 
-        if (underpaidPayments.length > 0) {
-          message += `\n⚠️ ${underpaidPayments.length
-            } oyda kam to'landi (jami: ${totalShortage.toFixed(2)} $)`;
-        }
+      if (underpaidPayments.length > 0) {
+        message += `\n⚠️ ${underpaidPayments.length
+          } oyda kam to'landi (jami: ${totalShortage.toFixed(2)} $)`;
+      }
 
-        if (remainingAmount > 0.01) {
-          message += `\n💰 ${remainingAmount.toFixed(
-            2
-          )} $ ortiqcha summa prepaid balance ga qo'shildi`;
-        }
+      if (remainingAmount > 0.01) {
+        message += `\n💰 ${remainingAmount.toFixed(
+          2
+        )} $ ortiqcha summa prepaid balance ga qo'shildi`;
       }
 
       // ✅ AUDIT LOG: Barcha oylarni to'lash
@@ -2129,7 +2090,7 @@ class PaymentService {
       return {
         status: "success",
         message: message,
-        isPending: isFromBot, // ⏳ Bot'dan kelsa - PENDING
+        // Dashboard - to'g'ridan-to'g'ri tasdiqlangan
         contractId: contract._id,
         paymentsCreated: createdPayments.length,
         totalAmount: actualAmount,

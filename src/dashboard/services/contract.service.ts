@@ -225,6 +225,10 @@ class ContractService {
       const nextPaymentDate = new Date(contractStartDate);
       nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
 
+      // ✅ TUZATISH: originalPaymentDay ni o'rnatish
+      const originalPaymentDay = contractStartDate.getDate();
+      logger.debug(`📅 Setting originalPaymentDay: ${originalPaymentDay}`);
+
       const contract = new Contract({
         customer,
         productName,
@@ -239,6 +243,7 @@ class ContractService {
         totalPrice,
         startDate: contractStartDate,
         nextPaymentDate: nextPaymentDate,
+        originalPaymentDay: originalPaymentDay, // ✅ TUZATISH: originalPaymentDay qo'shildi
         isActive: true,
         createBy: createBy._id,
         info: {
@@ -362,6 +367,9 @@ class ContractService {
       const nextPaymentDate = new Date(contractStartDate);
       nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
 
+      // ✅ TUZATISH: originalPaymentDay ni o'rnatish
+      const originalPaymentDay = contractStartDate.getDate();
+
       const contract = new Contract({
         customer,
         productName,
@@ -376,6 +384,7 @@ class ContractService {
         totalPrice,
         startDate: contractStartDate,
         nextPaymentDate: nextPaymentDate,
+        originalPaymentDay: originalPaymentDay, // ✅ TUZATISH: originalPaymentDay qo'shildi
         isActive: false, // ⚠️ Needs approval
         createBy: createBy._id,
         info: {
