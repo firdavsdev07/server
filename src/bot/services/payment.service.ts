@@ -486,6 +486,36 @@ class PaymentService {
           reminderDate: reminder,
           reminderComment: reminderComment || null,
         });
+        
+        // ✅ YANGI: Kassaga eslatma notification yaratish
+        const postponedDays = Math.ceil(
+          (reminder.getTime() - paymentDueDate.getTime()) / (1000 * 60 * 60 * 24)
+        );
+        
+        const reminderNotes = new Notes({
+          text: `${targetMonth}-oy to'lovi ${postponedDays} kunga kechiktirildi. Izoh: ${reminderComment || 'Izoh yo\'q'}`,
+          customer: customer._id,
+          createBy: user.sub,
+        });
+        await reminderNotes.save();
+        
+        await Payment.create({
+          amount: 0, // Summa yo'q - bu eslatma
+          actualAmount: 0,
+          date: reminder, // Eslatma sanasi
+          isPaid: false,
+          paymentType: PaymentType.MONTHLY,
+          notes: reminderNotes._id,
+          customerId: customer._id,
+          managerId: manager._id,
+          status: PaymentStatus.PENDING,
+          expectedAmount: 0,
+          targetMonth: targetMonth,
+          reminderDate: reminder,
+          reminderComment: reminderComment || null,
+          postponedDays: postponedDays,
+          isReminderNotification: true, // ✅ Bu eslatma notification
+        });
 
         // Contract'ga payment qo'shish
         contract.payments.push(newPayment._id as any);
@@ -502,6 +532,45 @@ class PaymentService {
         await Payment.findByIdAndUpdate(paymentId, {
           reminderDate: reminder,
           reminderComment: reminderComment || null,
+        });
+        
+        // ✅ YANGI: Kassaga eslatma notification yaratish
+        const paymentDate = new Date((payment as any).date);
+        const postponedDays = Math.ceil(
+          (reminder.getTime() - paymentDate.getTime()) / (1000 * 60 * 60 * 24)
+        );
+        
+        const reminderNotes = new Notes({
+          text: `${targetMonth}-oy to'lovi ${postponedDays} kunga kechiktirildi. Izoh: ${reminderComment || 'Izoh yo\'q'}`,
+          customer: customer._id,
+          createBy: user.sub,
+        });
+        await reminderNotes.save();
+        
+        // Oldingi eslatma notification'ni o'chirish (agar bor bo'lsa)
+        await Payment.deleteMany({
+          customerId: customer._id,
+          targetMonth: targetMonth,
+          isReminderNotification: true,
+          isPaid: false,
+        });
+        
+        await Payment.create({
+          amount: 0, // Summa yo'q - bu eslatma
+          actualAmount: 0,
+          date: reminder, // Eslatma sanasi
+          isPaid: false,
+          paymentType: PaymentType.MONTHLY,
+          notes: reminderNotes._id,
+          customerId: customer._id,
+          managerId: user.sub,
+          status: PaymentStatus.PENDING,
+          expectedAmount: 0,
+          targetMonth: targetMonth,
+          reminderDate: reminder,
+          reminderComment: reminderComment || null,
+          postponedDays: postponedDays,
+          isReminderNotification: true, // ✅ Bu eslatma notification
         });
 
       }
@@ -569,9 +638,16 @@ class PaymentService {
 
       const paymentId = (payment as any)._id;
       await Payment.findByIdAndUpdate(paymentId, {
-        $unset: { reminderDate: 1 },
+        $unset: { reminderDate: 1, reminderComment: 1 },
       });
 
+      // ✅ YANGI: Kassadagi eslatma notification'ni ham o'chirish
+      await Payment.deleteMany({
+        customerId: customer._id,
+        targetMonth: targetMonth,
+        isReminderNotification: true,
+        isPaid: false,
+      });
 
       return {
         status: "success",

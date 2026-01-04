@@ -203,6 +203,20 @@ export class PaymentConfirmationService extends PaymentBaseService {
       await contract.save();
       logger.debug("💾 Contract saved with updated nextPaymentDate");
 
+      // ✅ YANGI: To'lov qilinganda eslatma notification'larini o'chirish
+      if (payment.targetMonth) {
+        const deletedReminders = await Payment.deleteMany({
+          customerId: payment.customerId,
+          targetMonth: payment.targetMonth,
+          isReminderNotification: true,
+          isPaid: false,
+        });
+        
+        if (deletedReminders.deletedCount > 0) {
+          logger.debug(`🗑️ ${deletedReminders.deletedCount} eslatma notification o'chirildi (${payment.targetMonth}-oy to'landi)`);
+        }
+      }
+
       // Audit log yaratish - customerName va paymentCreator bilan
       const customer = await Customer.findById(payment.customerId);
       const customerName = customer?.fullName || "Noma'lum mijoz";

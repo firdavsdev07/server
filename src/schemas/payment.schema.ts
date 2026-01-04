@@ -48,6 +48,8 @@ export interface IPayment {
   nextPaymentDate?: Date; // ✅ YANGI - Kam to'lov bo'lsa, qolgan qismini qachon to'lash kerak
   reminderDate?: Date; // ✅ YANGI - Manager tomonidan belgilangan eslatma sanasi
   reminderComment?: string; // ✅ YANGI - Manager eslatma izohi
+  postponedDays?: number; // ✅ YANGI - Kechiktirilgan kunlar soni (kassaga ko'rsatish uchun)
+  isReminderNotification?: boolean; // ✅ YANGI - Bu eslatma notification'imi? (to'lov emas)
   // ✅ Mongoose timestamps (avtomatik qo'shiladi)
   createdAt?: Date;
   updatedAt?: Date;
@@ -113,6 +115,8 @@ const PaymentSchema = new Schema<IPayment>(
     nextPaymentDate: { type: Date, required: false }, // ✅ YANGI - Kam to'lov bo'lsa, qolgan qismini qachon to'lash kerak
     reminderDate: { type: Date, required: false }, // ✅ YANGI - Manager tomonidan belgilangan eslatma sanasi
     reminderComment: { type: String, required: false }, // ✅ YANGI - Manager eslatma izohi
+    postponedDays: { type: Number, required: false }, // ✅ YANGI - Kechiktirilgan kunlar soni
+    isReminderNotification: { type: Boolean, default: false }, // ✅ YANGI - Eslatma notification'i
   },
   {
     timestamps: true,
