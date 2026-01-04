@@ -9,6 +9,7 @@ import createCurrencyCourse from "./utils/createCurrencyCourse";
 import debtorService from "./dashboard/services/debtor.service";
 import { checkAllContractsStatus } from "./utils/checkAllContractsStatus";
 import notificationService from "./services/notification.service";
+import backupService from "./services/backup.service";
 import logger from "./utils/logger";
 
 const PORT = process.env.PORT || 3000;
@@ -23,6 +24,9 @@ const startServer = async () => {
     app.listen(PORT, () => {
       logger.debug(`Server is running on port ${PORT}`);
     });
+
+    // ✅ MongoDB backup service'ni ishga tushirish
+    backupService.startScheduledBackup();
 
     setInterval(async () => {
       try {
