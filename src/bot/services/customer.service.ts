@@ -55,6 +55,7 @@ class CustomerService {
       }
 
       const managerId = new Types.ObjectId(user.sub);
+      const currentDate = new Date(); // Hozirgi sana (reminderDate uchun)
 
       const result = await Contract.aggregate([
         {
@@ -99,6 +100,43 @@ class CustomerService {
               $ne: null, 
               $lte: filterEndDate 
             }
+          }
+        },
+        
+        // ✅ YANGI: Eslatma tekshirish - faqat reminderDate o'tgan yoki null bo'lgan to'lovlarni olish
+        {
+          $addFields: {
+            // nextPaymentDate'ga mos payment'ni topish
+            nextPaymentData: {
+              $arrayElemAt: [
+                {
+                  $filter: {
+                    input: "$paymentDetails",
+                    as: "p",
+                    cond: {
+                      $and: [
+                        { $eq: ["$$p.date", "$nextPaymentDate"] },
+                        { $eq: ["$$p.isPaid", false] }
+                      ]
+                    }
+                  }
+                },
+                0
+              ]
+            }
+          }
+        },
+        
+        // ✅ Agar reminderDate bor va hali o'tmagan bo'lsa - bu shartnomani filtrlash
+        {
+          $match: {
+            $or: [
+              // reminderDate yo'q
+              { "nextPaymentData.reminderDate": { $exists: false } },
+              { "nextPaymentData.reminderDate": null },
+              // yoki reminderDate o'tgan (bugundan oldingi)
+              { "nextPaymentData.reminderDate": { $lte: currentDate } }
+            ]
           }
         },
         
