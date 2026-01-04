@@ -191,22 +191,22 @@ class BackupService {
   }
 
   /**
-   * Scheduled Excel backup (har 1 daqiqada - TEST)
+   * Scheduled Excel backup (har 30 daqiqada)
    */
   startScheduledBackup(): void {
-    logger.info("🕒 Starting scheduled Excel backup (every 1 minute - TEST MODE)...");
+    logger.info("🕒 Starting scheduled Excel backup (every 30 minutes)...");
     
     // Dastlabki backup (10 soniyadan keyin)
     setTimeout(() => {
       this.createBackup();
     }, 10000);
     
-    // Har 1 daqiqada backup
+    // Har 30 daqiqada backup
     setInterval(() => {
       this.createBackup();
-    }, 1 * 60 * 1000); // 1 daqiqa
+    }, 30 * 60 * 1000); // 30 daqiqa
     
-    logger.info("✅ Excel backup service started (1 min interval - TEST MODE)");
+    logger.info("✅ Excel backup service started (30 min interval)");
   }
 }
 
