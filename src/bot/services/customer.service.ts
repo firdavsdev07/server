@@ -106,17 +106,36 @@ class CustomerService {
         // ✅ YANGI: Eslatma tekshirish - faqat reminderDate o'tgan yoki null bo'lgan to'lovlarni olish
         {
           $addFields: {
+            // Barcha to'lanmagan to'lovlarni olish
+            unpaidPayments: {
+              $filter: {
+                input: "$paymentDetails",
+                as: "p",
+                cond: { $eq: ["$$p.isPaid", false] }
+              }
+            }
+          }
+        },
+        {
+          $addFields: {
             // nextPaymentDate'ga mos payment'ni topish
+            // Sana taqqoslash muammosi bo'lsa - date range bilan
             nextPaymentData: {
               $arrayElemAt: [
                 {
                   $filter: {
-                    input: "$paymentDetails",
+                    input: "$unpaidPayments",
                     as: "p",
                     cond: {
                       $and: [
-                        { $eq: ["$$p.date", "$nextPaymentDate"] },
-                        { $eq: ["$$p.isPaid", false] }
+                        // Date'larni string formatda taqqoslash
+                        {
+                          $eq: [
+                            { $dateToString: { format: "%Y-%m-%d", date: "$$p.date" } },
+                            { $dateToString: { format: "%Y-%m-%d", date: "$nextPaymentDate" } }
+                          ]
+                        },
+                        { $eq: ["$$p.paymentType", "monthly"] }
                       ]
                     }
                   }
@@ -134,7 +153,7 @@ class CustomerService {
               // reminderDate yo'q
               { "nextPaymentData.reminderDate": { $exists: false } },
               { "nextPaymentData.reminderDate": null },
-              // yoki reminderDate o'tgan (bugundan oldingi)
+              // yoki reminderDate o'tgan (bugundan kichik yoki teng)
               { "nextPaymentData.reminderDate": { $lte: currentDate } }
             ]
           }
@@ -221,12 +240,17 @@ class CustomerService {
 
       
       if (result.length > 0) {
-        logger.debug(` Sample debtor:`, {
-          name: result[0].fullName,
-          totalDebt: result[0].totalDebt,
-          delayDays: result[0].delayDays,
-          overdueCount: result[0].totalOverdueCount
+        logger.debug(`✅ Qarzdorlar ro'yxati (reminderDate filtr bilan):`, {
+          count: result.length,
+          sample: {
+            name: result[0].fullName,
+            remainingDebt: result[0].remainingDebt,
+            delayDays: result[0].delayDays,
+            nextPaymentDate: result[0].nextPaymentDate
+          }
         });
+      } else {
+        logger.debug(`✅ Qarzdorlar topilmadi (hamma eslatma qo'ygan bo'lishi mumkin)`);
       }
       
       return { status: "success", data: result };
