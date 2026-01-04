@@ -7,8 +7,9 @@ export enum PaymentStatus {
   PAID = "PAID",
   UNDERPAID = "UNDERPAID",
   OVERPAID = "OVERPAID",
-  PENDING = "PENDING",
-  REJECTED = "REJECTED", // YANGI - rad etilgan to'lov
+  PENDING = "PENDING",       // Kassada tasdiqlash kutilmoqda
+  REJECTED = "REJECTED",     // Rad etilgan to'lov
+  SCHEDULED = "SCHEDULED",   // Rejalashtirilgan to'lov (hali vaqti kelmagan)
 }
 
 export enum PaymentType {

@@ -1012,11 +1012,57 @@ class ExcelImportService {
           contractData.startDate
         );
 
-        // ✅ TUZATILDI: Qolgan oylar uchun to'lovlar yaratilMAYDI
-        // Sabab: Excel import faqat to'langan to'lovlar uchun ishlatiladi
-        // Qolgan oylar uchun to'lovlar keyinchalik (to'lov qilinganda) avtomatik yaratiladi
+        // ✅ MUHIM: To'lanmagan oylar uchun to'lovlar yaratish
+        // Excel'da faqat to'langan oylar bor, qolgan oylar uchun pending to'lovlar kerak
+        const paidMonthlyPayments = (contract.payments as any[]).filter(p => 
+          p.paymentType === PaymentType.MONTHLY || (p.paymentType && p.paymentType.toString() === 'monthly')
+        );
+        const totalMonthlyPaymentsCreated = paidMonthlyPayments.length;
+        const remainingMonths = contractData.period - totalMonthlyPaymentsCreated;
         
-        logger.debug(`  ℹ️ Excel import: Faqat to'langan to'lovlar import qilindi (qolgan oylar uchun to'lovlar yaratilmaydi)`);
+        if (remainingMonths > 0) {
+          logger.debug(`  📅 Creating ${remainingMonths} remaining payment(s) for unpaid months...`);
+          logger.debug(`     Total period: ${contractData.period}, Created: ${totalMonthlyPaymentsCreated}, Remaining: ${remainingMonths}`);
+          
+          // Qolgan oylar uchun to'lovlar yaratish
+          for (let month = totalMonthlyPaymentsCreated + 1; month <= contractData.period; month++) {
+            const contractDay = dayjs(contractData.startDate).date();
+            const paymentDate = dayjs(contractData.startDate)
+              .add(month, 'month')
+              .date(contractDay)
+              .toDate();
+            
+            const notes = await Notes.create({
+              text: `${month}-oy to'lovi (kutilmoqda)`,
+              customer: customerId,
+              createBy: managerObjectId,
+            });
+            
+            const payment = await Payment.create({
+              amount: contractData.monthlyPayment,
+              actualAmount: 0,
+              date: paymentDate,
+              isPaid: false,
+              paymentType: PaymentType.MONTHLY,
+              customerId: customerId,
+              managerId: managerObjectId,
+              notes: notes._id,
+              status: PaymentStatus.PENDING,
+              expectedAmount: contractData.monthlyPayment,
+              remainingAmount: contractData.monthlyPayment,
+              excessAmount: 0,
+              targetMonth: month,
+            });
+            
+            contract.payments.push(payment._id as any);
+            
+            logger.debug(`     ✓ Payment created for month ${month}: ${paymentDate.toISOString().split('T')[0]}`);
+          }
+          
+          await contract.save();
+          
+          logger.debug(`  ✅ Added ${remainingMonths} pending payment(s) to contract`);
+        }
 
         successCount++;
         logger.debug(`✅ Row ${rowNumber} imported successfully`);
