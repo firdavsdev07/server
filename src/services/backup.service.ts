@@ -105,7 +105,9 @@ class BackupService {
       const hash = crypto.createHash("md5");
       const stream = fs.createReadStream(filePath);
       
-      stream.on("data", (data) => hash.update(data));
+      stream.on("data", (chunk: string | Buffer) => {
+        hash.update(chunk);
+      });
       stream.on("end", () => resolve(hash.digest("hex")));
       stream.on("error", reject);
     });

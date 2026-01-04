@@ -24,7 +24,7 @@ dist-ssr
 *.sw?
 .env/*
 .env
-uploads/excel-1766096165571-601951168.xlsx
+uploads/
 
 # MongoDB backup files (eski, kerak emas)
 backups/
