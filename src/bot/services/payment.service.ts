@@ -578,6 +578,174 @@ class PaymentService {
       throw error;
     }
   }
+
+  /**
+   * Bot uchun: Qolgan qarzni to'lash (PENDING status bilan)
+   * Dashboard service'dan farqi - to'lovlar kassaga yuboriladi
+   */
+  async payRemaining(data: any, user: IJwtUser) {
+    try {
+      const contract = await Contract.findOne({
+        _id: data.contractId,
+        isDeleted: false,
+        isActive: true
+      }).populate("payments").populate("customer");
+
+      if (!contract) {
+        throw BaseError.NotFoundError("Shartnoma topilmadi");
+      }
+
+      const manager = await Employee.findById(user.sub);
+      if (!manager) {
+        throw BaseError.NotFoundError("Manager topilmadi");
+      }
+
+      // Hozirgi oyni topish
+      const allPayments = contract.payments as any[];
+      const paidPayments = allPayments.filter(
+        (p) => p.paymentType === PaymentType.MONTHLY && p.isPaid
+      );
+      const currentMonth = paidPayments.length + 1;
+
+      // Hozirgi oy uchun to'lovni topish
+      const existingPayment = allPayments.find(
+        (p) => p.targetMonth === currentMonth && p.paymentType === PaymentType.MONTHLY
+      );
+
+      if (!existingPayment) {
+        throw BaseError.NotFoundError("Hozirgi oy uchun to'lov topilmadi");
+      }
+
+      if (existingPayment.isPaid) {
+        throw BaseError.BadRequest("Bu to'lov allaqachon to'langan");
+      }
+
+      // Qolgan qarzni hisoblash
+      const remainingAmount = existingPayment.remainingAmount || existingPayment.amount;
+      const amountPaid = data.amount;
+
+      if (amountPaid <= 0) {
+        throw BaseError.BadRequest("To'lov summasi 0 dan katta bo'lishi kerak");
+      }
+
+      // Notes yaratish
+      const notes = new Notes({
+        text: data.notes || `${currentMonth}-oy uchun qolgan qarz to'landi`,
+        customer: contract.customer,
+        createBy: manager._id,
+      });
+      await notes.save();
+
+      // To'lovni PENDING statusga o'zgartirish
+      existingPayment.actualAmount = (existingPayment.actualAmount || 0) + amountPaid;
+      existingPayment.status = PaymentStatus.PENDING;
+      existingPayment.notes = notes._id;
+      existingPayment.managerId = manager._id;
+      
+      // Yangi qolgan qarzni hisoblash
+      const newRemainingAmount = remainingAmount - amountPaid;
+      const excessAmount = amountPaid > remainingAmount ? amountPaid - remainingAmount : 0;
+
+      existingPayment.remainingAmount = Math.max(0, newRemainingAmount);
+      existingPayment.excessAmount = (existingPayment.excessAmount || 0) + excessAmount;
+
+      await existingPayment.save();
+
+      return {
+        status: "success",
+        message: "To'lov qabul qilindi, kassa tasdiqlashi kutilmoqda",
+        paymentId: existingPayment._id,
+        isPending: true,
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Bot uchun: Barcha qolgan oylarni to'lash (PENDING status bilan)
+   */
+  async payAllRemaining(data: any, user: IJwtUser) {
+    try {
+      const contract = await Contract.findOne({
+        _id: data.contractId,
+        isDeleted: false,
+        isActive: true
+      }).populate("payments").populate("customer");
+
+      if (!contract) {
+        throw BaseError.NotFoundError("Shartnoma topilmadi");
+      }
+
+      const manager = await Employee.findById(user.sub);
+      if (!manager) {
+        throw BaseError.NotFoundError("Manager topilmadi");
+      }
+
+      const allPayments = contract.payments as any[];
+      const unpaidPayments = allPayments.filter(
+        (p) => p.paymentType === PaymentType.MONTHLY && !p.isPaid
+      );
+
+      if (unpaidPayments.length === 0) {
+        throw BaseError.BadRequest("Barcha to'lovlar allaqachon to'langan");
+      }
+
+      // Qolgan qarzni hisoblash
+      const totalRemaining = unpaidPayments.reduce(
+        (sum, p) => sum + (p.remainingAmount || p.amount),
+        0
+      );
+
+      const amountPaid = data.amount;
+
+      if (amountPaid <= 0) {
+        throw BaseError.BadRequest("To'lov summasi 0 dan katta bo'lishi kerak");
+      }
+
+      // Notes yaratish
+      const notes = new Notes({
+        text: data.notes || `Barcha qolgan oylar uchun to'lov`,
+        customer: contract.customer,
+        createBy: manager._id,
+      });
+      await notes.save();
+
+      // Barcha to'lovlarni PENDING statusga o'zgartirish
+      let remainingToPay = amountPaid;
+      const updatedPayments = [];
+
+      for (const payment of unpaidPayments) {
+        if (remainingToPay <= 0) break;
+
+        const paymentDue = payment.remainingAmount || payment.amount;
+        const paymentAmount = Math.min(remainingToPay, paymentDue);
+
+        payment.actualAmount = (payment.actualAmount || 0) + paymentAmount;
+        payment.status = PaymentStatus.PENDING;
+        payment.notes = notes._id;
+        payment.managerId = manager._id;
+        payment.remainingAmount = Math.max(0, paymentDue - paymentAmount);
+        
+        if (paymentAmount > paymentDue) {
+          payment.excessAmount = (payment.excessAmount || 0) + (paymentAmount - paymentDue);
+        }
+
+        await payment.save();
+        updatedPayments.push(payment._id);
+        remainingToPay -= paymentAmount;
+      }
+
+      return {
+        status: "success",
+        message: `${updatedPayments.length} oylik to'lovlar qabul qilindi, kassa tasdiqlashi kutilmoqda`,
+        paymentIds: updatedPayments,
+        isPending: true,
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
 }
 
 export default new PaymentService();

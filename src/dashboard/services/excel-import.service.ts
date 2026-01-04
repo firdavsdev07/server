@@ -1047,7 +1047,7 @@ class ExcelImportService {
               customerId: customerId,
               managerId: managerObjectId,
               notes: notes._id,
-              status: PaymentStatus.PENDING,
+              status: PaymentStatus.SCHEDULED, // ✅ SCHEDULED - hali to'lanmagan, faqat rejalashtirilgan
               expectedAmount: contractData.monthlyPayment,
               remainingAmount: contractData.monthlyPayment,
               excessAmount: 0,

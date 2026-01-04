@@ -7,7 +7,6 @@ import { validate } from "class-validator";
 import { PayDebtDto, PayNewDebtDto } from "../../validators/payment";
 import { handleValidationErrors } from "../../validators/format";
 import paymentService from "../services/payment.service";
-import dashboardPaymentController from "../../dashboard/controllers/payment.controller";
 import logger from "../../utils/logger";
 
 // const user: IJwtUser = {
@@ -56,11 +55,37 @@ class PaymentController {
 
 
   async payAllRemainingMonths(req: Request, res: Response, next: NextFunction) {
-    return dashboardPaymentController.payAllRemainingMonths(req, res, next);
+    try {
+      const user = req.user;
+      if (!user) {
+        return res.status(401).json({
+          status: "error",
+          message: "Autentifikatsiya qilinmagan",
+        });
+      }
+
+      const data = await paymentService.payAllRemaining(req.body, user);
+      res.status(200).json(data);
+    } catch (error) {
+      return next(error);
+    }
   }
 
   async payRemaining(req: Request, res: Response, next: NextFunction) {
-    return dashboardPaymentController.payRemaining(req, res, next);
+    try {
+      const user = req.user;
+      if (!user) {
+        return res.status(401).json({
+          status: "error",
+          message: "Autentifikatsiya qilinmagan",
+        });
+      }
+
+      const data = await paymentService.payRemaining(req.body, user);
+      res.status(200).json(data);
+    } catch (error) {
+      return next(error);
+    }
   }
 
 
