@@ -1016,16 +1016,12 @@ class PaymentService {
         logger.debug(`⚠️ Still UNDERPAID: ${newRemainingAmount} $ remaining`);
       }
 
-      // ✅ TUZATISH: Bot'dan kelgan to'lovlar PENDING statusda saqlanishi kerak
-      // Kassa tasdiqlashidan o'tishi kerak
-      const isFromBot = user.role === RoleEnum.MANAGER || user.role === RoleEnum.SELLER;
-
-      if (isFromBot) {
-        // ✅ Bot'dan: PENDING statusda, kassa tasdiqlashi kerak
-        existingPayment.status = PaymentStatus.PENDING;
-        existingPayment.isPaid = false;
-        logger.info("⏳ Payment status set to PENDING (from bot, awaiting cash confirmation)");
-      }
+      // ✅ TUZATISH: Dashboard'dan to'lov qilganda DARHOL PAID bo'ladi
+      // Bot'dan kelgan to'lovlar alohida bot/services/payment.service.ts da boshqariladi
+      // Bu yerda (dashboard service) faqat Dashboard'dan keladi - ADMIN, MODERATOR, MANAGER
+      // Ularning hammasini PAID qilamiz (kassa tasdiq bermaydi, to'g'ridan-to'g'ri qabul qilinadi)
+      
+      // Hech narsa qilmaymiz - default PAID bo'ladi
 
       await existingPayment.save();
 
@@ -1870,11 +1866,13 @@ class PaymentService {
     user: IJwtUser
   ) {
     try {
-      // ✅ Bot'dan kelganini aniqlash
-      const isFromBot = user.role === RoleEnum.MANAGER || user.role === RoleEnum.SELLER;
+      // ✅ TUZATISH: Dashboard'dan to'lov - hammasini PAID qilamiz
+      // Bot API alohida endpoint: /api/bot/payment/... (bot/services/payment.service.ts)
+      // Dashboard API: /api/payment/... (dashboard/services/payment.service.ts)
+      const isFromBot = false; // ✅ Dashboard service - faqat Dashboard'dan keladi
 
       logger.debug("💰 === PAY ALL REMAINING MONTHS ===");
-      logger.debug("From:", isFromBot ? "BOT (Manager/Seller)" : "DASHBOARD (Admin/Kassa)");
+      logger.debug("From: DASHBOARD (Admin/Moderator/Manager)");
 
       const contract = await Contract.findById(payData.contractId).populate(
         "customer"

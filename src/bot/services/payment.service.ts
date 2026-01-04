@@ -64,28 +64,28 @@ class PaymentService {
     );
     const Contract = (await import("../../schemas/contract.schema")).default;
 
-    const contract = await Contract.findOne({ 
-      _id: existingDebtor.contractId._id, 
+    const contract = await Contract.findOne({
+      _id: existingDebtor.contractId._id,
       isDeleted: false,
-      isActive: true 
+      isActive: true
     }).populate('payments');
 
     if (!contract) {
       throw BaseError.NotFoundError("Shartnoma topilmadi");
     }
 
- 
+
     const paidMonthlyPayments = (contract.payments as any[]).filter(
       (p) => p.paymentType === PaymentType.MONTHLY && p.isPaid
     );
     const calculatedTargetMonth = paidMonthlyPayments.length + 1;
 
     const amountPaid = payData.amount;
-    const expectedDebtAmount = amountPaid; 
+    const expectedDebtAmount = amountPaid;
 
     let calculatedExcessAmount = 0;
     let calculatedRemainingAmount = 0;
-    let actualAmount = amountPaid; 
+    let actualAmount = amountPaid;
 
     if (amountPaid > expectedDebtAmount) {
       calculatedExcessAmount = amountPaid - expectedDebtAmount;
@@ -106,7 +106,7 @@ class PaymentService {
 
       const nextDate = new Date(payData.nextPaymentDate);
       const today = new Date();
-      today.setHours(0, 0, 0, 0); 
+      today.setHours(0, 0, 0, 0);
       nextDate.setHours(0, 0, 0, 0);
 
       if (nextDate <= today) {
@@ -118,7 +118,7 @@ class PaymentService {
     }
 
     const paymentDoc = await Payment.create({
-      amount: expectedDebtAmount, 
+      amount: expectedDebtAmount,
       actualAmount: actualAmount,
       date: new Date(),
       isPaid: false,
@@ -127,11 +127,11 @@ class PaymentService {
       customerId: customer,
       managerId: manager._id,
       status: PaymentStatus.PENDING,
-      expectedAmount: expectedDebtAmount, 
-      excessAmount: calculatedExcessAmount, 
-      remainingAmount: calculatedRemainingAmount, 
-      targetMonth: payData.targetMonth || calculatedTargetMonth, 
-      nextPaymentDate: payData.nextPaymentDate ? new Date(payData.nextPaymentDate) : undefined, 
+      expectedAmount: expectedDebtAmount,
+      excessAmount: calculatedExcessAmount,
+      remainingAmount: calculatedRemainingAmount,
+      targetMonth: payData.targetMonth || calculatedTargetMonth,
+      nextPaymentDate: payData.nextPaymentDate ? new Date(payData.nextPaymentDate) : undefined,
     });
 
     // ✅ MUHIM: PENDING payment'ni contract'ga qo'shamiz (frontend uchun zarur!)
@@ -144,15 +144,15 @@ class PaymentService {
       status: "success",
       message: "To'lov qabul qilindi, kassa tasdiqlashi kutilmoqda",
       paymentId: paymentDoc._id,
-      isPending: true, 
+      isPending: true,
     };
   }
 
   async payNewDebt(payData: PayNewDebtDto, user: IJwtUser) {
-    const existingContract = await Contract.findOne({ 
-      _id: payData.id, 
+    const existingContract = await Contract.findOne({
+      _id: payData.id,
       isDeleted: false,
-      isActive: true 
+      isActive: true
     }).populate('payments');
 
     if (!existingContract) {
@@ -220,26 +220,30 @@ class PaymentService {
 
     const finalTargetMonth = payData.targetMonth || calculatedTargetMonth;
 
-    const existingPlaceholder = (existingContract.payments as any[]).find(
+    // ✅ TUZATISH: SCHEDULED yoki null statusli to'lovlarni topish
+    // Dashboard'dan yaratilgan shartnomalarning to'lovlari SCHEDULED statusida bo'ladi
+    const existingScheduledPayment = (existingContract.payments as any[]).find(
       (p) => Number(p.targetMonth) === Number(finalTargetMonth) &&
         p.paymentType === PaymentType.MONTHLY &&
-        p.status === null &&  // Placeholder - eslatma uchun yaratilgan
+        (p.status === PaymentStatus.SCHEDULED || p.status === null) &&  // ✅ SCHEDULED yoki null
         !p.isPaid
     );
 
     let paymentDoc;
 
-    if (existingPlaceholder) {
+    if (existingScheduledPayment) {
+      // ✅ Mavjud SCHEDULED to'lovni PENDING ga o'zgartirish
+      logger.info(`📅 Found existing SCHEDULED payment for month ${finalTargetMonth}, converting to PENDING`);
 
       paymentDoc = await Payment.findByIdAndUpdate(
-        existingPlaceholder._id,
+        existingScheduledPayment._id,
         {
           amount: expectedMonthlyPayment,
           actualAmount: actualAmount,
           date: new Date(),
           notes: notes._id,
           managerId: manager._id,
-          status: PaymentStatus.PENDING, 
+          status: PaymentStatus.PENDING,  // ✅ SCHEDULED -> PENDING
           expectedAmount: expectedMonthlyPayment,
           excessAmount: calculatedExcessAmount,
           remainingAmount: calculatedRemainingAmount,
@@ -249,6 +253,7 @@ class PaymentService {
       );
 
     } else {
+      // Yangi to'lov yaratish (agar SCHEDULED to'lov topilmasa)
       paymentDoc = await Payment.create({
         amount: expectedMonthlyPayment,
         actualAmount: actualAmount,
@@ -402,10 +407,10 @@ class PaymentService {
   ) {
     try {
 
-      const contract = await Contract.findOne({ 
-        _id: contractId, 
+      const contract = await Contract.findOne({
+        _id: contractId,
         isDeleted: false,
-        isActive: true 
+        isActive: true
       })
         .populate("payments")
         .populate("customer");
@@ -447,7 +452,7 @@ class PaymentService {
       let paymentId: string;
 
       if (!payment) {
-       
+
         const Notes = (await import("../../schemas/notes.schema")).default;
         const manager = await Employee.findById(user.sub);
 
@@ -474,10 +479,10 @@ class PaymentService {
           notes: notes._id,
           customerId: customer._id,
           managerId: manager._id,
-          status: null, 
+          status: null,
           expectedAmount: contract.monthlyPayment,
           targetMonth: targetMonth,
-          reminderDate: reminder, 
+          reminderDate: reminder,
         });
 
         // Contract'ga payment qo'shish
@@ -516,10 +521,10 @@ class PaymentService {
   ) {
     try {
 
-      const contract = await Contract.findOne({ 
-        _id: contractId, 
+      const contract = await Contract.findOne({
+        _id: contractId,
         isDeleted: false,
-        isActive: true 
+        isActive: true
       })
         .populate("payments")
         .populate("customer");

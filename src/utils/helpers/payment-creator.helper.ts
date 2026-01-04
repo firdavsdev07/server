@@ -141,14 +141,14 @@ export class PaymentCreatorHelper {
 
       // Notes yaratish (default)
       const notes = await Notes.create({
-        text: `${month}-oy to'lovi (kutilmoqda)`,
+        text: `${month}-oy to'lovi (rejalashtirilgan)`,
         customer: customerId,
         createBy: String(managerId),
       });
 
-      // Payment yaratish - isPaid: false
-      // ✅ MUHIM: status PENDING emas, chunki bu hali to'lov jarayonida emas
-      // Faqat kutilayotgan to'lov (scheduled payment)
+      // Payment yaratish - isPaid: false, status: SCHEDULED
+      // ✅ MUHIM: status SCHEDULED - kassada ko'rinmaydi
+      // Bu faqat kelgusida to'lanishi kerak bo'lgan rejalashtirilgan to'lov
       const payment = await Payment.create({
         amount: monthlyPayment,
         actualAmount: 0, // Hali to'lanmagan
@@ -158,8 +158,7 @@ export class PaymentCreatorHelper {
         customerId: customerId,
         managerId: managerId,
         notes: notes._id,
-        // ✅ TUZATISH: status undefined qolsin (default PENDING bo'ladi schema'da)
-        // Lekin bu "kassa kutilmoqda" emas, balki "hali to'lanmagan"
+        status: PaymentStatus.SCHEDULED, // ✅ TUZATISH: SCHEDULED - kassada ko'rinmaydi
         expectedAmount: monthlyPayment,
         remainingAmount: monthlyPayment, // To'liq summa qolgan
         excessAmount: 0,
@@ -172,7 +171,7 @@ export class PaymentCreatorHelper {
       logger.debug(`  ✓ Payment created for month ${month}: ${payment._id}`);
     }
 
-    logger.debug(`✅ Created ${payments.length} payment(s) for contract ${contractId}`);
+    logger.debug(`✅ Created ${payments.length} SCHEDULED payment(s) for contract ${contractId}`);
 
     return payments;
   }
@@ -221,8 +220,8 @@ export class PaymentCreatorHelper {
 
       const noteText = notePrefix
         ? `${notePrefix} - ${monthNumber}-oy to'lovi: ${paymentAmount.toFixed(
-            2
-          )} $`
+          2
+        )} $`
         : undefined;
 
       const payment = await this.createMonthlyPayment({
