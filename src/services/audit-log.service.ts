@@ -481,7 +481,16 @@ class AuditLogService {
    * @param date - Allaqachon UTC formatda kelgan sana (controller'dan parseUzbekistanDate orqali)
    * @param limit - Maksimal yozuvlar soni
    */
-  async getDailyActivity(date: Date = new Date(), limit: number = 100) {
+  async getDailyActivity(
+    date: Date = new Date(), 
+    limit: number = 100,
+    filters?: {
+      action?: string;
+      entity?: string;
+      managerId?: string;
+      employeeId?: string;
+    }
+  ) {
     // Controller'dan kelgan date allaqachon to'g'ri UTC formatda:
     // "2025-12-19" => 2025-12-18T19:00:00.000Z (19-dekabr 00:00 Toshkent)
     // "2025-12-20" => 2025-12-19T19:00:00.000Z (20-dekabr 00:00 Toshkent)
@@ -504,12 +513,31 @@ class AuditLogService {
     const dateString = `${year}-${month}-${day}`;
     const endOfDay = getUzbekistanDayEnd(dateString);
 
-    const activities = await AuditLog.find({
+    // ✅ YANGI: Query obyektini yaratish
+    const query: any = {
       timestamp: {
         $gte: startOfDay,
         $lte: endOfDay,
       },
-    })
+    };
+
+    // ✅ YANGI: Filterlarni qo'shish
+    if (filters) {
+      if (filters.action) {
+        query.action = filters.action;
+      }
+      if (filters.entity) {
+        query.entity = filters.entity;
+      }
+      if (filters.managerId) {
+        query.userId = new Types.ObjectId(filters.managerId);
+      }
+      if (filters.employeeId) {
+        query.userId = new Types.ObjectId(filters.employeeId);
+      }
+    }
+
+    const activities = await AuditLog.find(query)
     .select('-userAgent -ipAddress') // Keraksiz fieldlarni o'chirish
     .populate("userId", "firstName lastName role")
     .sort({ timestamp: -1 })

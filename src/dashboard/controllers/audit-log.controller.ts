@@ -48,7 +48,29 @@ class AuditLogController {
       const limitParam = req.query.limit ? parseInt(req.query.limit as string) : 100;
       const limit = Math.min(limitParam, 500); // Max 500 ta yozuv
       
-      const activities = await auditLogService.getDailyActivity(selectedDate, limit);
+      // ✅ YANGI: Filter parametrlari
+      const action = req.query.action as string | undefined;
+      const entity = req.query.entity as string | undefined;
+      const managerId = req.query.managerId as string | undefined;
+      const employeeId = req.query.employeeId as string | undefined;
+      
+      console.log("🔍 Audit Log Filters:", { action, entity, managerId, employeeId });
+      
+      const activities = await auditLogService.getDailyActivity(
+        selectedDate, 
+        limit,
+        {
+          action,
+          entity,
+          managerId,
+          employeeId,
+        }
+      );
+      
+      console.log("📊 Filtered Result:", {
+        totalLogs: activities.length,
+        filters: { action, entity, managerId, employeeId }
+      });
       
       // Debug log - qaytarilgan ma'lumotlar
       console.log('📊 Audit Log Result:', {
