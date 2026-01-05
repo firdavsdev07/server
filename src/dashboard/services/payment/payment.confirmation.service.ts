@@ -39,6 +39,11 @@ export class PaymentConfirmationService extends PaymentBaseService {
         throw BaseError.NotFoundError("To'lov topilmadi");
       }
 
+      // ✅ TUZATILDI: Eslatma notification'ni tasdiqlash mumkin emas
+      if (payment.isReminderNotification) {
+        throw BaseError.BadRequest("Eslatma notification'ni tasdiqlash mumkin emas. Bu faqat ma'lumot uchun!");
+      }
+
       logger.debug("📦 Payment details:", {
         id: payment._id,
         amount: payment.amount,
@@ -203,17 +208,17 @@ export class PaymentConfirmationService extends PaymentBaseService {
       await contract.save();
       logger.debug("💾 Contract saved with updated nextPaymentDate");
 
-      // ✅ YANGI: To'lov qilinganda eslatma notification'larini o'chirish
+      // ✅ TUZATILDI: To'lov qilinganda o'sha oy VA oldingi barcha oylarning eslatmalarini o'chirish
       if (payment.targetMonth) {
         const deletedReminders = await Payment.deleteMany({
           customerId: payment.customerId,
-          targetMonth: payment.targetMonth,
+          targetMonth: { $lte: payment.targetMonth }, // ✅ O'sha oy va oldingi oylar
           isReminderNotification: true,
           isPaid: false,
         });
         
         if (deletedReminders.deletedCount > 0) {
-          logger.debug(`🗑️ ${deletedReminders.deletedCount} eslatma notification o'chirildi (${payment.targetMonth}-oy to'landi)`);
+          logger.debug(`🗑️ ${deletedReminders.deletedCount} eslatma notification o'chirildi (${payment.targetMonth}-oy va oldingi oylar uchun)`);
         }
       }
 
@@ -378,6 +383,11 @@ export class PaymentConfirmationService extends PaymentBaseService {
 
       if (!payment) {
         throw BaseError.NotFoundError("To'lov topilmadi");
+      }
+
+      // ✅ TUZATILDI: Eslatma notification'ni rad etish mumkin emas
+      if (payment.isReminderNotification) {
+        throw BaseError.BadRequest("Eslatma notification'ni rad etish mumkin emas. Eslatmani faqat manager o'chirishi mumkin!");
       }
 
       if (payment.isPaid) {

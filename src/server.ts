@@ -11,6 +11,7 @@ import { checkAllContractsStatus } from "./utils/checkAllContractsStatus";
 import notificationService from "./services/notification.service";
 import backupService from "./services/backup.service";
 import logger from "./utils/logger";
+import { startReminderCleanupCron } from "./cron/reminder-cleanup.cron";
 
 const PORT = process.env.PORT || 3000;
 
@@ -27,6 +28,9 @@ const startServer = async () => {
 
     // ✅ MongoDB backup service'ni ishga tushirish
     backupService.startScheduledBackup();
+
+    // ✅ YANGI: Muddati o'tgan eslatmalarni tozalash cron job
+    startReminderCleanupCron();
 
     setInterval(async () => {
       try {

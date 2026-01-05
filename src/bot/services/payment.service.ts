@@ -461,8 +461,16 @@ class PaymentService {
           throw BaseError.NotFoundError("Manager topilmadi");
         }
 
+        // ✅ TUZATILDI: Oldingi eslatma notification'larni o'chirish (duplicate oldini olish)
+        await Payment.deleteMany({
+          customerId: customer._id,
+          targetMonth: targetMonth,
+          isReminderNotification: true,
+          isPaid: false,
+        });
+
         const notes = new Notes({
-          text: `${targetMonth}-oy uchun eslatma belgilandi`,
+          text: reminderComment || `${targetMonth}-oy uchun eslatma belgilandi`,
           customer: customer._id,
           createBy: manager._id,
         });
@@ -492,23 +500,14 @@ class PaymentService {
           (reminder.getTime() - paymentDueDate.getTime()) / (1000 * 60 * 60 * 24)
         );
         
-        // ✅ YANGI: Faqat manager izohi (agar bor bo'lsa)
-        const notesText = reminderComment || 'Eslatma (izoh yo\'q)';
-        
-        const reminderNotes = new Notes({
-          text: notesText,
-          customer: customer._id,
-          createBy: user.sub,
-        });
-        await reminderNotes.save();
-        
-        await Payment.create({
+        // ✅ TUZATILDI: Bir xil Notes'dan foydalanish (dublikat oldini olish)
+        const reminderNotification = await Payment.create({
           amount: 0, // Summa yo'q - bu eslatma
           actualAmount: 0,
           date: reminder, // Eslatma sanasi
           isPaid: false,
           paymentType: PaymentType.MONTHLY,
-          notes: reminderNotes._id,
+          notes: notes._id, // ✅ Bir xil Notes
           customerId: customer._id,
           managerId: user.sub,
           status: PaymentStatus.PENDING,
@@ -522,6 +521,8 @@ class PaymentService {
 
         // Contract'ga payment qo'shish
         contract.payments.push(newPayment._id as any);
+        // ✅ TUZATILDI: Eslatma notification'ni ham qo'shish
+        contract.payments.push(reminderNotification._id as any);
         await contract.save();
 
         paymentId = newPayment._id.toString();
@@ -529,6 +530,14 @@ class PaymentService {
         if (payment.isPaid) {
           throw BaseError.BadRequest("To'langan to'lovga reminder qo'yib bo'lmaydi");
         }
+
+        // ✅ TUZATILDI: Oldingi eslatma notification'larni o'chirish (duplicate oldini olish)
+        await Payment.deleteMany({
+          customerId: customer._id,
+          targetMonth: targetMonth,
+          isReminderNotification: true,
+          isPaid: false,
+        });
 
         // Mavjud payment'ni yangilash
         paymentId = (payment as any)._id;
@@ -543,31 +552,34 @@ class PaymentService {
           (reminder.getTime() - paymentDate.getTime()) / (1000 * 60 * 60 * 24)
         );
         
-        // ✅ YANGI: Faqat manager izohi (agar bor bo'lsa)
-        const notesText = reminderComment || 'Eslatma (izoh yo\'q)';
+        // ✅ TUZATILDI: Mavjud payment'ning notes'idan foydalanish (dublikat oldini olish)
+        const existingNotes = await Notes.findById((payment as any).notes);
         
-        const reminderNotes = new Notes({
-          text: notesText,
-          customer: customer._id,
-          createBy: user.sub,
-        });
-        await reminderNotes.save();
+        // Agar mavjud notes bo'lmasa, yangi yaratamiz
+        let notesId;
+        if (existingNotes) {
+          // Mavjud notes'ga eslatma izohini qo'shamiz
+          existingNotes.text = reminderComment || existingNotes.text;
+          await existingNotes.save();
+          notesId = existingNotes._id;
+        } else {
+          const newNotes = new Notes({
+            text: reminderComment || 'Eslatma (izoh yo\'q)',
+            customer: customer._id,
+            createBy: user.sub,
+          });
+          await newNotes.save();
+          notesId = newNotes._id;
+        }
         
-        // Oldingi eslatma notification'ni o'chirish (agar bor bo'lsa)
-        await Payment.deleteMany({
-          customerId: customer._id,
-          targetMonth: targetMonth,
-          isReminderNotification: true,
-          isPaid: false,
-        });
-        
-        await Payment.create({
+        // ✅ TUZATILDI: Eslatma notification'ni yaratish va Contract'ga qo'shish
+        const reminderNotification = await Payment.create({
           amount: 0, // Summa yo'q - bu eslatma
           actualAmount: 0,
           date: reminder, // Eslatma sanasi
           isPaid: false,
           paymentType: PaymentType.MONTHLY,
-          notes: reminderNotes._id,
+          notes: notesId, // ✅ Mavjud Notes'dan foydalanish
           customerId: customer._id,
           managerId: user.sub,
           status: PaymentStatus.PENDING,
@@ -579,6 +591,9 @@ class PaymentService {
           isReminderNotification: true, // ✅ Bu eslatma notification
         });
 
+        // ✅ TUZATILDI: Eslatma notification'ni Contract'ga qo'shish
+        contract.payments.push(reminderNotification._id as any);
+        await contract.save();
       }
 
       return {
