@@ -487,30 +487,17 @@ class AuditLogService {
     filters?: {
       action?: string;
       entity?: string;
-      managerId?: string;
       employeeId?: string;
       search?: string;
-      startDate?: Date;
-      endDate?: Date;
       minAmount?: number;
       maxAmount?: number;
     }
   ) {
-    // ✅ YANGI: Query obyektini yaratish
+    // ✅ Query obyektini yaratish
     const query: any = {};
 
-    // Date range yoki single date
-    if (filters?.startDate || filters?.endDate) {
-      // Date range
-      query.timestamp = {};
-      if (filters.startDate) {
-        query.timestamp.$gte = filters.startDate;
-      }
-      if (filters.endDate) {
-        query.timestamp.$lte = filters.endDate;
-      }
-    } else if (date) {
-      // Single date
+    // Single date
+    if (date) {
       const { getUzbekistanDayEnd } = require('../utils/helpers/date.helper');
       
       const startOfDay = date;
@@ -527,16 +514,13 @@ class AuditLogService {
       };
     }
 
-    // ✅ YANGI: Filterlarni qo'shish
+    // ✅ Filterlarni qo'shish
     if (filters) {
       if (filters.action) {
         query.action = filters.action;
       }
       if (filters.entity) {
         query.entity = filters.entity;
-      }
-      if (filters.managerId) {
-        query.userId = new Types.ObjectId(filters.managerId);
       }
       if (filters.employeeId) {
         query.userId = new Types.ObjectId(filters.employeeId);
@@ -549,7 +533,7 @@ class AuditLogService {
         ];
       }
       if (filters.minAmount !== undefined || filters.maxAmount !== undefined) {
-        // Amount range filter
+        // Amount range filter (keyinchalik qo'shiladi)
         query['metadata.amount'] = {};
         if (filters.minAmount !== undefined) {
           query['metadata.amount'].$gte = filters.minAmount;
