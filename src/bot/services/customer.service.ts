@@ -44,7 +44,7 @@ class CustomerService {
   async getUnpaidDebtors(user: IJwtUser, filterDate?: string) {
     try {
       let filterEndDate: Date;
-      
+
       if (filterDate && filterDate.trim() !== "") {
         const [year, month, day] = filterDate.split('-').map(Number);
         filterEndDate = new Date(year, month - 1, day, 23, 59, 59, 999);
@@ -65,7 +65,7 @@ class CustomerService {
             status: "active",
           },
         },
-        
+
         {
           $lookup: {
             from: "customers",
@@ -75,7 +75,7 @@ class CustomerService {
           },
         },
         { $unwind: { path: "$customerData", preserveNullAndEmptyArrays: false } },
-        
+
         {
           $match: {
             "customerData.manager": managerId,
@@ -83,7 +83,7 @@ class CustomerService {
             "customerData.isDeleted": false,
           },
         },
-        
+
         {
           $lookup: {
             from: "payments",
@@ -92,17 +92,17 @@ class CustomerService {
             as: "paymentDetails",
           },
         },
-        
+
         {
           $match: {
-            nextPaymentDate: { 
-              $exists: true, 
-              $ne: null, 
-              $lte: filterEndDate 
+            nextPaymentDate: {
+              $exists: true,
+              $ne: null,
+              $lte: filterEndDate
             }
           }
         },
-        
+
         // ✅ YANGI: Eslatma tekshirish - faqat reminderDate o'tgan yoki null bo'lgan to'lovlarni olish
         {
           $addFields: {
@@ -145,7 +145,7 @@ class CustomerService {
             }
           }
         },
-        
+
         // ✅ Agar reminderDate bor va hali o'tmagan bo'lsa - bu shartnomani filtrlash
         {
           $match: {
@@ -158,7 +158,7 @@ class CustomerService {
             ]
           }
         },
-        
+
         {
           $addFields: {
             totalPaid: {
@@ -192,12 +192,12 @@ class CustomerService {
             },
           },
         },
-        
+
         {
           $addFields: {
             remainingDebt: {
               $subtract: [
-                { $ifNull: ["$totalPrice", "$price"] }, 
+                { $ifNull: ["$totalPrice", "$price"] },
                 "$totalPaid"
               ],
             },
@@ -211,34 +211,53 @@ class CustomerService {
             }
           }
         },
-        
+
         {
           $match: { remainingDebt: { $gt: 0 } }
         },
-        
+
         {
           $project: {
             _id: "$_id", // Contract ID
             customerId: "$customerData._id",
             fullName: "$customerData.fullName",
             phoneNumber: "$customerData.phoneNumber",
-            productName: "$productName", 
-            contractId: "$_id", 
-            remainingDebt: "$remainingDebt", 
+            productName: "$productName",
+            contractId: "$_id",
+            remainingDebt: "$remainingDebt",
             delayDays: "$delayDays",
             nextPaymentDate: "$nextPaymentDate",
             totalPrice: { $ifNull: ["$totalPrice", "$price"] },
             totalPaid: "$totalPaid",
-            startDate: "$startDate", 
-            period: "$period", 
-            paidMonthsCount: "$paidMonthsCount", 
+            startDate: "$startDate",
+            period: "$period",
+            paidMonthsCount: "$paidMonthsCount",
+            isPending: {
+              $gt: [
+                {
+                  $size: {
+                    $filter: {
+                      input: "$paymentDetails",
+                      as: "p",
+                      cond: {
+                        $and: [
+                          { $eq: ["$$p.status", "PENDING"] },
+                          { $eq: ["$$p.isPaid", false] }
+                        ]
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            }
           },
         },
-        
+
         { $sort: { delayDays: -1, remainingDebt: -1 } },
       ]);
 
-      
+
       if (result.length > 0) {
         logger.debug(`✅ Qarzdorlar ro'yxati (reminderDate filtr bilan):`, {
           count: result.length,
@@ -252,7 +271,7 @@ class CustomerService {
       } else {
         logger.debug(`✅ Qarzdorlar topilmadi (hamma eslatma qo'ygan bo'lishi mumkin)`);
       }
-      
+
       return { status: "success", data: result };
     } catch (error) {
       throw BaseError.InternalServerError(String(error));
@@ -410,7 +429,7 @@ class CustomerService {
                 $match: {
                   $expr: {
                     $and: [
-                      { $eq: ["$customerId", "$$customerId"] }, 
+                      { $eq: ["$customerId", "$$customerId"] },
                       { $eq: ["$isPaid", true] },
                     ],
                   },
@@ -451,7 +470,7 @@ class CustomerService {
               {
                 $match: {
                   $expr: {
-                    $in: ["$contractId", "$$contractIds"], 
+                    $in: ["$contractId", "$$contractIds"],
                   },
                 },
               },
@@ -476,10 +495,10 @@ class CustomerService {
                   as: "debtor",
                   in: {
                     $cond: [
-                      { $lt: ["$$debtor.dueDate", new Date()] }, 
+                      { $lt: ["$$debtor.dueDate", new Date()] },
                       {
                         $dateDiff: {
-                          startDate: "$$debtor.dueDate", 
+                          startDate: "$$debtor.dueDate",
                           endDate: new Date(),
                           unit: "day",
                         },
@@ -512,7 +531,7 @@ class CustomerService {
         );
       }
 
-     
+
 
       return {
         status: "success",
@@ -585,7 +604,7 @@ class CustomerService {
           postponedAt: 1,
           isPostponedOnce: 1,
           originalPaymentDay: 1,
-          durationMonths: "$period", 
+          durationMonths: "$period",
           payments: {
             $map: {
               input: "$paymentDetails",
@@ -602,7 +621,7 @@ class CustomerService {
                 excessAmount: "$$payment.excessAmount",
                 expectedAmount: "$$payment.expectedAmount",
                 targetMonth: "$$payment.targetMonth",
-                reminderDate: "$$payment.reminderDate", 
+                reminderDate: "$$payment.reminderDate",
               },
             },
           },
@@ -726,7 +745,7 @@ class CustomerService {
           nextPaymentDate: "$contract.nextPaymentDate",
           previousPaymentDate: "$contract.previousPaymentDate",
           postponedAt: "$contract.postponedAt",
-          debtorId: "$debtorId", 
+          debtorId: "$debtorId",
           isPaid: 1,
           paidMonthsCount: {
             $size: {
@@ -742,7 +761,7 @@ class CustomerService {
               },
             },
           },
-          durationMonths: "$contract.period", 
+          durationMonths: "$contract.period",
           payments: {
             $map: {
               input: "$paymentDetails",
