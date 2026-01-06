@@ -115,11 +115,11 @@ class ExcelExportService {
 
       // Oylik ustunlarni faqat birinchi header'ga qo'shish
       headerRow1.push(...monthColumns);
-      
+
       // Ikkinchi header uchun bo'sh qiymatlar (oylik ustunlar uchun)
       const emptyMonthHeaders = monthColumns.map(() => "");
       headerRow2.push(...emptyMonthHeaders);
-      
+
       // Ikki qatorli header
       excelData.push(headerRow1);
       excelData.push(headerRow2);
@@ -131,27 +131,28 @@ class ExcelExportService {
 
         // ✅ Asosiy shartnoma ma'lumotlari (import format)
         // totalPrice = initialPayment + (monthlyPayment * period)
-        const totalPrice = (contract.initialPayment || 0) + ((contract.monthlyPayment || 0) * (contract.period || 12));
-        
+        const monthlyPayment = Math.round(contract.monthlyPayment || 0);
+        const totalPrice = Math.round((contract.initialPayment || 0) + (monthlyPayment * (contract.period || 12)));
+
         // ✅ nextPaymentDate - birinchi oylik to'lov sanasi (startDate + 1 oy)
         const firstPaymentDate = dayjs(contract.startDate).add(1, 'month').format("M/D/YYYY");
-        
+
         const row: any[] = [
           dayjs(contract.startDate).format("M/D/YYYY"),              // row[0] - Shartnoma sanasi (6/18/2025)
           dayjs(contract.startDate).date(),                          // row[1] - Kun raqami (18)
           firstPaymentDate,                                          // row[2] - Birinchi to'lov (7/18/2025)
           customer?.fullName || "Unknown",                           // row[3] - Mijoz
           contract.productName || "",                                // row[4] - Mahsulot
-          contract.originalPrice || 0,                               // row[5] - Asl narx
-          contract.price || 0,                                       // row[6] - Narx
-          contract.initialPayment || 0,                              // row[7] - Boshlang'ich to'lov
+          Math.round(contract.originalPrice || 0),                   // row[5] - Asl narx
+          Math.round(contract.price || 0),                            // row[6] - Narx
+          Math.round(contract.initialPayment || 0),                   // row[7] - Boshlang'ich to'lov
           contract.period || 12,                                     // row[8] - Muddat (oy)
-          contract.monthlyPayment || 0,                              // row[9] - Oylik to'lov
-          totalPrice,                                                // row[10] - Umumiy narx (formula!)
+          monthlyPayment,                                            // row[9] - Oylik to'lov
+          totalPrice,                                                // row[10] - Umumiy narx
           contract.percentage || 30,                                 // row[11] - Foiz
-          "",                                                        // row[12] - Izoh (bo'sh - notes ObjectId emas)
-          contractAny.box ? "bor" : "",                              // row[13] - Box (bor yoki bo'sh)
-          contractAny.mbox ? "bor" : "",                             // row[14] - Mbox (bor yoki bo'sh)
+          "",                                                        // row[12] - Izoh
+          contractAny.box ? "bor" : "",                              // row[13] - Box
+          contractAny.mbox ? "bor" : "",                             // row[14] - Mbox
         ];
 
         // Oylik to'lovlarni qo'shish
@@ -166,7 +167,7 @@ class ExcelExportService {
             return paymentMonth === monthCol;
           });
 
-          row.push(payment ? payment.actualAmount || payment.amount : "");
+          row.push(payment ? Math.round(payment.actualAmount || payment.amount || 0) : "");
         }
 
         excelData.push(row);
@@ -175,12 +176,12 @@ class ExcelExportService {
       // 4. Excel fayl yaratish (ExcelJS)
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("Shartnomalar");
-      
+
       // ✅ Ma'lumotlarni worksheet'ga qo'shish
       excelData.forEach(row => {
         worksheet.addRow(row);
       });
-      
+
       // ✅ Ustun kengliklarini sozlash
       worksheet.columns = [
         { width: 12 },  // startDate
@@ -200,7 +201,7 @@ class ExcelExportService {
         { width: 15 },  // mbox
         ...monthColumns.map(() => ({ width: 10 })), // Oylik ustunlar
       ];
-      
+
       // ✅ Ranglar qo'shish (ExcelJS format)
       // Header row 1 - Ko'k rang
       const headerRow1Cells = worksheet.getRow(1);
@@ -213,7 +214,7 @@ class ExcelExportService {
         cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; // Oq text
         cell.alignment = { horizontal: 'center', vertical: 'middle' };
       });
-      
+
       // Header row 2 - Och ko'k rang
       const headerRow2Cells = worksheet.getRow(2);
       headerRow2Cells.eachCell((cell) => {
@@ -225,7 +226,7 @@ class ExcelExportService {
         cell.font = { bold: true };
         cell.alignment = { horizontal: 'center', vertical: 'middle' };
       });
-      
+
       // Mijoz ustuni (D) - sariq rang
       for (let i = 3; i <= worksheet.rowCount; i++) {
         const cell = worksheet.getCell(i, 4); // D ustuni (customer)
@@ -236,7 +237,7 @@ class ExcelExportService {
         };
         cell.alignment = { horizontal: 'left', vertical: 'middle' };
       }
-      
+
       // totalPrice ustuni (K) - yashil rang
       for (let i = 3; i <= worksheet.rowCount; i++) {
         const cell = worksheet.getCell(i, 11); // K ustuni (totalPrice)
