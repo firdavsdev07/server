@@ -39,11 +39,6 @@ export class PaymentConfirmationService extends PaymentBaseService {
         throw BaseError.NotFoundError("To'lov topilmadi");
       }
 
-      // ✅ TUZATILDI: Eslatma notification'ni tasdiqlash mumkin emas
-      if (payment.isReminderNotification) {
-        throw BaseError.BadRequest("Eslatma notification'ni tasdiqlash mumkin emas. Bu faqat ma'lumot uchun!");
-      }
-
       logger.debug("📦 Payment details:", {
         id: payment._id,
         amount: payment.amount,
@@ -216,7 +211,7 @@ export class PaymentConfirmationService extends PaymentBaseService {
           isReminderNotification: true,
           isPaid: false,
         });
-        
+
         if (deletedReminders.deletedCount > 0) {
           logger.debug(`🗑️ ${deletedReminders.deletedCount} eslatma notification o'chirildi (${payment.targetMonth}-oy va oldingi oylar uchun)`);
         }
@@ -225,12 +220,12 @@ export class PaymentConfirmationService extends PaymentBaseService {
       // Audit log yaratish - customerName va paymentCreator bilan
       const customer = await Customer.findById(payment.customerId);
       const customerName = customer?.fullName || "Noma'lum mijoz";
-      
+
       // ✅ YANGI: Pulni yig'ib to'lovni qilgan odamni olish (managerId)
       await payment.populate('managerId');
       const paymentCreator = payment.managerId as any;
-      const paymentCreatorName = paymentCreator 
-        ? `${paymentCreator.firstName || ''} ${paymentCreator.lastName || ''}`.trim() 
+      const paymentCreatorName = paymentCreator
+        ? `${paymentCreator.firstName || ''} ${paymentCreator.lastName || ''}`.trim()
         : "Noma'lum";
 
       await this.createAuditLog({
@@ -384,11 +379,6 @@ export class PaymentConfirmationService extends PaymentBaseService {
 
       if (!payment) {
         throw BaseError.NotFoundError("To'lov topilmadi");
-      }
-
-      // ✅ TUZATILDI: Eslatma notification'ni rad etish mumkin emas
-      if (payment.isReminderNotification) {
-        throw BaseError.BadRequest("Eslatma notification'ni rad etish mumkin emas. Eslatmani faqat manager o'chirishi mumkin!");
       }
 
       if (payment.isPaid) {
