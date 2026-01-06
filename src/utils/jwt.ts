@@ -18,24 +18,23 @@ class Jwt {
 
   sign(payload: IJwtUser) {
     const accessToken = jwt.sign(payload, this.accessTokenSecret, {
-      expiresIn: "1h",
+      expiresIn: "7d",
     });
     const refreshToken = jwt.sign(payload, this.refreshTokenSecret, {
-      expiresIn: "7d",
+      expiresIn: "30d",
     });
     return { accessToken, refreshToken };
   }
-
   signBot(payload: IJwtUser) {
     const accessToken = jwt.sign(payload, this.accessTokenSecret, {
-      expiresIn: "1d",
+      expiresIn: "30d",
     });
 
     return accessToken;
   }
   signrefresh(payload: IJwtUser) {
     const accessToken = jwt.sign(payload, this.accessTokenSecret, {
-      expiresIn: "1h",
+      expiresIn: "7d",
     });
     return accessToken;
   }

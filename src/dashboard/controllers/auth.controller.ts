@@ -33,7 +33,7 @@ class AuthController {
 
       const cookieOptions: any = {
         httpOnly: true,
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 kun
+        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 kun
         path: "/",
         secure: isProduction || isNgrok, // HTTPS production yoki ngrok'da
         sameSite: isProduction || isNgrok ? "none" : "lax", // Cross-site production yoki ngrok'da
