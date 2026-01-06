@@ -39,6 +39,7 @@ interface PaymentDto {
     sum: number;
   };
   currencyCourse: number;
+  paymentMethod?: string; // ✅ YANGI: To'lov usuli (som_cash, som_card, dollar_cash, dollar_card_visa)
 }
 
 class PaymentService {
@@ -346,6 +347,7 @@ class PaymentService {
         date: new Date(),
         isPaid: false, // ❌ BOT TO'LOVI - Kassa tasdiqlashi kerak
         paymentType: PaymentType.MONTHLY,
+        paymentMethod: data.paymentMethod, // ✅ YANGI: To'lov usuli
         customerId: contract.customer,
         managerId: user.sub,
         notes: notes._id,
@@ -526,7 +528,7 @@ class PaymentService {
       if (!contract) {
         throw BaseError.NotFoundError("Faol shartnoma topilmadi");
       }
-      
+
       // Customer name olish
       const customerName = (contract.customer as any)?.fullName || "Unknown Customer";
 
@@ -1020,7 +1022,7 @@ class PaymentService {
       // Bot'dan kelgan to'lovlar alohida bot/services/payment.service.ts da boshqariladi
       // Bu yerda (dashboard service) faqat Dashboard'dan keladi - ADMIN, MODERATOR, MANAGER
       // Ularning hammasini PAID qilamiz (kassa tasdiq bermaydi, to'g'ridan-to'g'ri qabul qilinadi)
-      
+
       // Hech narsa qilmaymiz - default PAID bo'ladi
 
       await existingPayment.save();
@@ -1134,7 +1136,7 @@ class PaymentService {
 
       // ✅ Response message (Dashboard - to'g'ridan-to'g'ri tasdiqlangan)
       let message = "";
-      
+
       if (excessAmount > 0.01) {
         message = `Qolgan qarz to'liq to'landi va ${excessAmount.toFixed(
           2
@@ -1226,6 +1228,7 @@ class PaymentService {
       notes?: string;
       currencyDetails: { dollar: number; sum: number };
       currencyCourse: number;
+      paymentMethod?: string; // ✅ YANGI: To'lov usuli
     },
     user: IJwtUser
   ) {
@@ -1346,6 +1349,7 @@ class PaymentService {
           date: scheduledDate, // ✅ FIXED: Asl belgilangan sana
           isPaid: true, // Dashboard darhol tasdiqlaydi
           paymentType: PaymentType.MONTHLY,
+          paymentMethod: payData.paymentMethod, // ✅ YANGI: To'lov usuli
           customerId: contract.customer,
           managerId: String(manager._id),
           notes: notes._id,
@@ -1840,14 +1844,11 @@ class PaymentService {
       notes?: string;
       currencyDetails: { dollar: number; sum: number };
       currencyCourse: number;
+      paymentMethod?: string; // ✅ YANGI: To'lov usuli
     },
     user: IJwtUser
   ) {
     try {
-      // ✅ TUZATISH: Dashboard'dan to'lov - hammasini PAID qilamiz
-      // Bot API alohida endpoint: /api/bot/payment/... (bot/services/payment.service.ts)
-      // Dashboard API: /api/payment/... (dashboard/services/payment.service.ts)
-      // ✅ Dashboard service - faqat Dashboard'dan keladi (kassaga bormasin)
 
       logger.debug("💰 === PAY ALL REMAINING MONTHS ===");
       logger.debug("From: DASHBOARD (Admin/Moderator/Manager)");
@@ -1958,6 +1959,7 @@ class PaymentService {
           date: new Date(),
           isPaid: true, // ✅ Dashboard - to'g'ridan-to'g'ri PAID
           paymentType: PaymentType.MONTHLY,
+          paymentMethod: payData.paymentMethod, // ✅ YANGI: To'lov usuli
           customerId: contract.customer,
           managerId: String(manager._id),
           notes: notes._id,
