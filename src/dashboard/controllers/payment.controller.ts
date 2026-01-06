@@ -77,7 +77,7 @@ class PaymentController {
   async payRemaining(req: Request, res: Response, next: NextFunction) {
     try {
       const user = req.user;
-      const { paymentId, amount, notes, currencyDetails, currencyCourse } = req.body;
+      const { paymentId, amount, notes, currencyDetails, currencyCourse, paymentMethod } = req.body;
 
 
       // Validation
@@ -96,6 +96,7 @@ class PaymentController {
           notes: notes || "",
           currencyDetails: currencyDetails || { dollar: amount, sum: 0 },
           currencyCourse: currencyCourse || 12500,
+          paymentMethod: paymentMethod,
         },
         user
       );
@@ -110,19 +111,19 @@ class PaymentController {
   async payByContract(req: Request, res: Response, next: NextFunction) {
     try {
       const user = req.user;
-      const { contractId, amount, notes, currencyDetails, currencyCourse } =
+      const { contractId, amount, notes, currencyDetails, currencyCourse, paymentMethod } =
         req.body;
 
 
       if (notes && notes.includes("[PAY_REMAINING:")) {
         const match = notes.match(/\[PAY_REMAINING:([^\]]+)\]/);
-      
+
 
         if (match && match[1]) {
           const paymentId = match[1];
           const cleanNotes = notes.replace(/\[PAY_REMAINING:[^\]]+\]\s*/, "");
 
-      
+
 
           const data = await paymentService.payRemaining(
             {
@@ -131,6 +132,7 @@ class PaymentController {
               notes: cleanNotes,
               currencyDetails: currencyDetails || { dollar: amount, sum: 0 },
               currencyCourse: currencyCourse || 12500,
+              paymentMethod: paymentMethod,
             },
             user
           );
@@ -175,6 +177,7 @@ class PaymentController {
           notes,
           currencyDetails,
           currencyCourse,
+          paymentMethod,
         },
         user
       );
@@ -247,7 +250,7 @@ class PaymentController {
 
 
       const user = req.user;
-      const { contractId, amount, notes, currencyDetails, currencyCourse } =
+      const { contractId, amount, notes, currencyDetails, currencyCourse, paymentMethod } =
         req.body;
 
 
@@ -289,6 +292,7 @@ class PaymentController {
           notes,
           currencyDetails,
           currencyCourse,
+          paymentMethod,
         },
         user
       );

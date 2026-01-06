@@ -923,6 +923,7 @@ class PaymentService {
       notes: string;
       currencyDetails: { dollar: number; sum: number };
       currencyCourse: number;
+      paymentMethod?: string; // ✅ YANGI: To'lov usuli
     },
     user: IJwtUser
   ) {
@@ -1023,7 +1024,10 @@ class PaymentService {
       // Bu yerda (dashboard service) faqat Dashboard'dan keladi - ADMIN, MODERATOR, MANAGER
       // Ularning hammasini PAID qilamiz (kassa tasdiq bermaydi, to'g'ridan-to'g'ri qabul qilinadi)
 
-      // Hech narsa qilmaymiz - default PAID bo'ladi
+      // To'lov usulini yangilash
+      if (payData.paymentMethod) {
+        existingPayment.paymentMethod = payData.paymentMethod as any;
+      }
 
       await existingPayment.save();
 
