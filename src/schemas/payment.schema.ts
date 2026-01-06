@@ -25,12 +25,20 @@ export enum PaymentReason {
   TOTAL_PRICE_CHANGE = "total_price_change",
 }
 
+export enum PaymentMethod {
+  SOM_CASH = "som_cash",           // So'm naqd
+  SOM_CARD = "som_card",           // So'm karta
+  DOLLAR_CASH = "dollar_cash",     // Dollar naqd
+  DOLLAR_CARD_VISA = "dollar_card_visa", // Dollar karta Visa
+}
+
 export interface IPayment {
   amount: number; // Oylik to'lov (expected amount)
   actualAmount?: number; // ✅ YANGI - Haqiqatda to'langan summa
   date: Date;
   isPaid: boolean;
   paymentType: PaymentType; // YANGI - to'lov turi
+  paymentMethod?: PaymentMethod; // ✅ YANGI - To'lov usuli (so'm naqd, karta, dollar, va h.k.)
   notes: INotes;
   customerId: ICustomer;
   managerId: IEmployee;
@@ -66,6 +74,11 @@ const PaymentSchema = new Schema<IPayment>(
       enum: Object.values(PaymentType),
       required: true,
       default: PaymentType.MONTHLY,
+    },
+    paymentMethod: {
+      type: String,
+      enum: Object.values(PaymentMethod),
+      required: false,
     },
     notes: {
       type: Schema.Types.ObjectId,

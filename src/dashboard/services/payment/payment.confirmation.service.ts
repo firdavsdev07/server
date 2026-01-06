@@ -248,6 +248,7 @@ export class PaymentConfirmationService extends PaymentBaseService {
           customerName, // ✅ Mijoz ismi
           paymentType: "monthly",
           paymentStatus: payment.status,
+          paymentMethod: payment.paymentMethod, // ✅ YANGI: To'lov usuli
           amount: payment.actualAmount || payment.amount,
           targetMonth: payment.targetMonth,
           paymentCreatorId: paymentCreator?._id?.toString(), // ✅ YANGI: To'lov qilgan odam ID

@@ -10,6 +10,7 @@ import {
   IsDateString,
 } from "class-validator";
 import { Type } from "class-transformer";
+import { PaymentMethod } from "../schemas/payment.schema";
 
 class CurrencyDetailsDto {
   @IsNumber({}, { message: "Dollar qiymati raqam bo'lishi kerak" })
@@ -37,6 +38,10 @@ export class PayDto {
   @IsDateString({}, { message: "Keyingi to'lov sanasi noto'g'ri formatda" })
   @IsOptional()
   nextPaymentDate?: string; // ✅ YANGI: Kam to'lov bo'lsa, qolgan qismini qachon to'lash kerak
+
+  @IsEnum(PaymentMethod, { message: "To'lov usuli noto'g'ri" })
+  @IsOptional()
+  paymentMethod?: PaymentMethod; // ✅ YANGI: To'lov usuli (so'm naqd, karta, dollar, visa)
 
   @ValidateNested()
   @Type(() => CurrencyDetailsDto)
@@ -77,6 +82,10 @@ export class ReceivePaymentDto {
   @IsDateString({}, { message: "Keyingi to'lov sanasi noto'g'ri formatda" })
   @IsOptional()
   nextPaymentDate?: string; // ✅ YANGI: Kam to'lov bo'lsa, qolgan qismini qachon to'lash kerak
+
+  @IsEnum(PaymentMethod, { message: "To'lov usuli noto'g'ri" })
+  @IsOptional()
+  paymentMethod?: PaymentMethod; // ✅ YANGI: To'lov usuli (so'm naqd, karta, dollar, visa)
 
   @ValidateNested()
   @Type(() => CurrencyDetailsDto)

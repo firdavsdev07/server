@@ -123,6 +123,7 @@ class PaymentService {
       date: new Date(),
       isPaid: false,
       paymentType: PaymentType.MONTHLY,
+      paymentMethod: payData.paymentMethod, // ✅ YANGI: To'lov usuli
       notes: notes._id,
       customerId: customer,
       managerId: manager._id,
@@ -241,6 +242,7 @@ class PaymentService {
           amount: expectedMonthlyPayment,
           actualAmount: actualAmount,
           date: new Date(),
+          paymentMethod: payData.paymentMethod, // ✅ YANGI: To'lov usuli
           notes: notes._id,
           managerId: manager._id,
           status: PaymentStatus.PENDING,  // ✅ SCHEDULED -> PENDING
@@ -260,6 +262,7 @@ class PaymentService {
         date: new Date(),
         isPaid: false,
         paymentType: PaymentType.MONTHLY,
+        paymentMethod: payData.paymentMethod, // ✅ YANGI: To'lov usuli
         notes: notes._id,
         customerId: customer,
         managerId: manager._id,
