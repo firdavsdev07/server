@@ -518,12 +518,19 @@ class AuditLogService {
     if (filters) {
       if (filters.action) {
         query.action = filters.action;
+        console.log("📌 Filter: action =", filters.action);
       }
       if (filters.entity) {
         query.entity = filters.entity;
+        console.log("📌 Filter: entity =", filters.entity);
       }
       if (filters.employeeId) {
-        query.userId = new Types.ObjectId(filters.employeeId);
+        try {
+          query.userId = new Types.ObjectId(filters.employeeId);
+          console.log("📌 Filter: employeeId =", filters.employeeId, "=> ObjectId:", query.userId);
+        } catch (error) {
+          console.error("❌ Invalid employeeId format:", filters.employeeId);
+        }
       }
       if (filters.search) {
         // Search in customerName and affectedEntities.entityName
@@ -531,6 +538,7 @@ class AuditLogService {
           { 'metadata.customerName': { $regex: filters.search, $options: 'i' } },
           { 'metadata.affectedEntities.entityName': { $regex: filters.search, $options: 'i' } }
         ];
+        console.log("📌 Filter: search =", filters.search);
       }
       if (filters.minAmount !== undefined || filters.maxAmount !== undefined) {
         // Amount range filter (keyinchalik qo'shiladi)
@@ -541,8 +549,11 @@ class AuditLogService {
         if (filters.maxAmount !== undefined) {
           query['metadata.amount'].$lte = filters.maxAmount;
         }
+        console.log("📌 Filter: amount range =", filters.minAmount, "-", filters.maxAmount);
       }
     }
+    
+    console.log("🔍 Final MongoDB query:", JSON.stringify(query, null, 2));
 
     const activities = await AuditLog.find(query)
     .select('-userAgent -ipAddress') // Keraksiz fieldlarni o'chirish
