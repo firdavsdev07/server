@@ -68,7 +68,7 @@ class AuditLogController {
       
       console.log("📊 Filtered Result:", {
         totalLogs: activities.length,
-        filters: { action, entity, managerId, employeeId }
+        filters: { action, entity, employeeId, search, minAmount, maxAmount }
       });
       
       // Debug log - qaytarilgan ma'lumotlar
