@@ -380,7 +380,7 @@ class ExcelImportService {
    */
   private async recheckContractStatusAndNextPayment(
     contract: any,
-    startDate: Date
+    initialNextPaymentDate: Date // ✅ TUZATISH: startDate o'rniga initialNextPaymentDate
   ): Promise<void> {
     try {
       logger.debug("  🔍 Rechecking contract status and nextPaymentDate...");
@@ -431,20 +431,20 @@ class ExcelImportService {
       // Keyingi to'lov oyi
       const nextPaymentMonth = lastPaidMonth + 1;
 
-      // ✅ YANGI: originalPaymentDay ni o'rnatish (agar mavjud bo'lmasa)
-      const originalDay = contract.originalPaymentDay || dayjs(startDate).date();
+      // ✅ YANGI: originalPaymentDay ni o'rnatish (nextPaymentDate dan kunni olish)
+      const originalDay = contract.originalPaymentDay || dayjs(contract.nextPaymentDate).date();
       if (!contract.originalPaymentDay) {
         contract.originalPaymentDay = originalDay;
-        logger.debug(`    📅 originalPaymentDay set: ${originalDay}`);
+        logger.debug(`    📅 originalPaymentDay set from nextPaymentDate: ${originalDay}`);
       }
 
       // Agar barcha oylar to'langan bo'lmasa, nextPaymentDate yangilash
       if (nextPaymentMonth <= contract.period) {
-        // ✅ TUZATISH: startDate dan nextPaymentMonth oy qo'shish
-        // Misol: startDate = 2025-06-17, lastPaidMonth = 5, nextPaymentMonth = 6
-        // nextPaymentDate = 2025-06-17 + 6 oy = 2025-12-17
-        const nextPaymentDate = dayjs(startDate)
-          .add(nextPaymentMonth, "month")
+        // ✅ TUZATISH: initialNextPaymentDate dan lastPaidMonth (to'langan oylar soni) oy qo'shish
+        // Misol: initialNextPaymentDate = 2025-07-18, lastPaidMonth = 0 (hech narsa to'lanmadi) → 2025-07-18
+        // Misol: initialNextPaymentDate = 2025-07-18, lastPaidMonth = 5 (5 oy to'landi) → 2025-12-18
+        const nextPaymentDate = dayjs(initialNextPaymentDate)
+          .add(lastPaidMonth, "month")
           .date(originalDay)
           .toDate();
 
@@ -537,6 +537,7 @@ class ExcelImportService {
     monthlyPayments: Array<{ month: string; year: number; amount: number }>,
     expectedMonthlyPayment: number,
     contractStartDate: Date,
+    nextPaymentDate: Date, // ✅ YANGI: To'liq oylik to'lovlar boshlanish sanasi
     totalContractPrice?: number,
     period?: number,
     initialPayment?: number
@@ -647,13 +648,13 @@ class ExcelImportService {
 
     // ✅ YANGI: paymentMonthMapping asosida Payment yaratish
     for (const monthPayment of paymentMonthMapping) {
-      // ✅ TUZATISH: Belgilangan to'lov sanasi = startDate + monthIndex oy
-      // Misol: startDate = 2025-06-17, monthIndex = 1 → 2025-07-17 (1-oy to'lovi)
-      // Misol: startDate = 2025-06-17, monthIndex = 6 → 2025-12-17 (6-oy to'lovi)
-      const contractDay = dayjs(contractStartDate).date();
-      const paymentDate = dayjs(contractStartDate)
-        .add(monthPayment.monthIndex, 'month')
-        .date(contractDay)
+      // ✅ TUZATISH: Belgilangan to'lov sanasi = nextPaymentDate + (monthIndex - 1) oy
+      // Misol: nextPaymentDate = 2025-07-18, monthIndex = 1 → 2025-07-18
+      // Misol: nextPaymentDate = 2025-07-18, monthIndex = 2 → 2025-08-18
+      const paymentDay = dayjs(nextPaymentDate).date();
+      const paymentDate = dayjs(nextPaymentDate)
+        .add(monthPayment.monthIndex - 1, 'month')
+        .date(paymentDay)
         .toDate();
 
       const noteText = `${monthPayment.monthIndex}-oy to'lovi - ${dayjs(monthPayment.paidDate).format('DD.MM.YYYY')}\n${monthPayment.paidAmount.toFixed(2)}$`;
@@ -941,6 +942,7 @@ class ExcelImportService {
             monthlyPayments,
             contractData.monthlyPayment,
             contractData.startDate,
+            contractData.nextPaymentDate, // ✅ YANGI: nextPaymentDate uzatildi
             contractData.totalPrice, // ✅ YANGI: totalPrice ni o'tkazish
             contractData.period, // ✅ YANGI: period ni o'tkazish
             contractData.initialPayment // ✅ YANGI: initialPayment ni o'tkazish
@@ -1009,7 +1011,7 @@ class ExcelImportService {
         // ✅ YANGI: Contract status va nextPaymentDate tekshirish
         await this.recheckContractStatusAndNextPayment(
           contract,
-          contractData.startDate
+          contractData.nextPaymentDate // ✅ TUZATISH: nextPaymentDate uzatildi
         );
 
         // ✅ TUZATILDI: Qolgan oylar uchun to'lovlar YARATILMAYDI
