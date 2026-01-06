@@ -482,44 +482,50 @@ class AuditLogService {
    * @param limit - Maksimal yozuvlar soni
    */
   async getDailyActivity(
-    date: Date = new Date(), 
+    date?: Date, 
     limit: number = 100,
     filters?: {
       action?: string;
       entity?: string;
       managerId?: string;
       employeeId?: string;
+      search?: string;
+      startDate?: Date;
+      endDate?: Date;
+      minAmount?: number;
+      maxAmount?: number;
     }
   ) {
-    // Controller'dan kelgan date allaqachon to'g'ri UTC formatda:
-    // "2025-12-19" => 2025-12-18T19:00:00.000Z (19-dekabr 00:00 Toshkent)
-    // "2025-12-20" => 2025-12-19T19:00:00.000Z (20-dekabr 00:00 Toshkent)
-    
-    const { getUzbekistanDayEnd } = require('../utils/helpers/date.helper');
-    
-    // Start date allaqachon to'g'ri
-    const startOfDay = date;
-    
-    // End date'ni hisoblash
-    // date = 2025-12-18T19:00:00.000Z => bu 19-dekabrning boshi
-    // Bizga 19-dekabrning oxiri kerak: 2025-12-19T18:59:59.999Z
-    // 
-    // UTC date'dan original date string'ni qayta yaratish:
-    // 2025-12-18T19:00:00.000Z + 5 soat = 2025-12-19T00:00 (Toshkent)
-    const dateObj = new Date(date.getTime() + 5 * 60 * 60 * 1000); // +5 soat
-    const year = dateObj.getUTCFullYear();
-    const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(dateObj.getUTCDate()).padStart(2, '0');
-    const dateString = `${year}-${month}-${day}`;
-    const endOfDay = getUzbekistanDayEnd(dateString);
-
     // ✅ YANGI: Query obyektini yaratish
-    const query: any = {
-      timestamp: {
+    const query: any = {};
+
+    // Date range yoki single date
+    if (filters?.startDate || filters?.endDate) {
+      // Date range
+      query.timestamp = {};
+      if (filters.startDate) {
+        query.timestamp.$gte = filters.startDate;
+      }
+      if (filters.endDate) {
+        query.timestamp.$lte = filters.endDate;
+      }
+    } else if (date) {
+      // Single date
+      const { getUzbekistanDayEnd } = require('../utils/helpers/date.helper');
+      
+      const startOfDay = date;
+      const dateObj = new Date(date.getTime() + 5 * 60 * 60 * 1000); // +5 soat
+      const year = dateObj.getUTCFullYear();
+      const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.getUTCDate()).padStart(2, '0');
+      const dateString = `${year}-${month}-${day}`;
+      const endOfDay = getUzbekistanDayEnd(dateString);
+
+      query.timestamp = {
         $gte: startOfDay,
         $lte: endOfDay,
-      },
-    };
+      };
+    }
 
     // ✅ YANGI: Filterlarni qo'shish
     if (filters) {
@@ -534,6 +540,23 @@ class AuditLogService {
       }
       if (filters.employeeId) {
         query.userId = new Types.ObjectId(filters.employeeId);
+      }
+      if (filters.search) {
+        // Search in customerName and affectedEntities.entityName
+        query.$or = [
+          { 'metadata.customerName': { $regex: filters.search, $options: 'i' } },
+          { 'metadata.affectedEntities.entityName': { $regex: filters.search, $options: 'i' } }
+        ];
+      }
+      if (filters.minAmount !== undefined || filters.maxAmount !== undefined) {
+        // Amount range filter
+        query['metadata.amount'] = {};
+        if (filters.minAmount !== undefined) {
+          query['metadata.amount'].$gte = filters.minAmount;
+        }
+        if (filters.maxAmount !== undefined) {
+          query['metadata.amount'].$lte = filters.maxAmount;
+        }
       }
     }
 

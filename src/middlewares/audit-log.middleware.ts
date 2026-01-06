@@ -69,11 +69,16 @@ export const auditLogMiddleware = (
         }
 
         // Changes ni detect qilish (UPDATE uchun)
+        // ❌ MUAMMO: oldValue'ni to'g'ri olish qiyin, chunki middleware'da
+        // database'ga murojaat qilish sekin ishlaydi.
+        // ✅ YECHIM: Service layer'da to'g'ri qiymatlarni yozish
         let changes: { field: string; oldValue: any; newValue: any; }[] | undefined;
         if (action === AuditAction.UPDATE && options?.includeBody && req.body) {
+          // oldValue'ni hozircha undefined qilib qo'yamiz
+          // Service layer'da to'ldiriladi
           changes = Object.keys(req.body).map(field => ({
             field,
-            oldValue: "previous_value", // Bu qiymat service da to'ldirilishi kerak
+            oldValue: undefined, // Service layer'da to'ldiriladi
             newValue: req.body[field],
           }));
         }
@@ -81,10 +86,27 @@ export const auditLogMiddleware = (
         // IP address va User Agent olish
         const ipAddress = req.ip || 
           req.connection.remoteAddress || 
-          req.headers['x-forwarded-for'] as string ||
-          req.headers['x-real-ip'] as string;
+          (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+          req.headers['x-real-ip'] as string ||
+          'unknown';
           
-        const userAgent = req.headers['user-agent'];
+        const userAgent = req.headers['user-agent'] || 'unknown';
+
+        // ✅ Request start time (for duration tracking)
+        const requestStartTime = Date.now();
+
+        // ✅ Request duration hisoblash
+        const requestDuration = Date.now() - requestStartTime;
+
+        // ✅ Browser info parse qilish
+        const browserInfo = userAgent !== 'unknown' ? {
+          userAgent,
+          isMobile: /mobile/i.test(userAgent),
+          browser: userAgent.includes('Chrome') ? 'Chrome' :
+                   userAgent.includes('Firefox') ? 'Firefox' :
+                   userAgent.includes('Safari') ? 'Safari' :
+                   userAgent.includes('Edge') ? 'Edge' : 'Unknown',
+        } : undefined;
 
         // Audit log yaratish
         await auditLogService.createLog({
@@ -99,6 +121,8 @@ export const auditLogMiddleware = (
               entityId,
               entityName: entityName || `${entity}:${entityId}`,
             }] : undefined,
+            requestDuration, // ✅ Request davomiyligi (ms)
+            browserInfo, // ✅ Browser ma'lumotlari
           },
           ipAddress,
           userAgent,

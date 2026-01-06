@@ -19,29 +19,45 @@ class AuditLogController {
         return next(BaseError.ForbiddenError("Sizda audit log ko'rish huquqi yo'q"));
       }
 
-      // Date parametrini parse qilish
+      // Date parametrlarini parse qilish
       const dateParam = req.query.date as string;
+      const startDateParam = req.query.startDate as string;
+      const endDateParam = req.query.endDate as string;
       
       // ✅ TIMEZONE FIX: O'zbekiston vaqt zonasi (UTC+5)
       const { parseUzbekistanDate, getUzbekistanDayEnd } = await import("../../utils/helpers/date.helper");
       
-      let selectedDate: Date;
-      if (dateParam) {
-        // dateParam format: "2024-12-18"
+      let selectedDate: Date | undefined;
+      let startDate: Date | undefined;
+      let endDate: Date | undefined;
+      
+      // Date range has priority over single date
+      if (startDateParam || endDateParam) {
+        if (startDateParam) {
+          startDate = parseUzbekistanDate(startDateParam);
+        }
+        if (endDateParam) {
+          endDate = getUzbekistanDayEnd(endDateParam);
+        }
+        
+        console.log('🔍 Audit Log Date Range:', {
+          startDateParam,
+          endDateParam,
+          startDate: startDate?.toISOString(),
+          endDate: endDate?.toISOString(),
+        });
+      } else if (dateParam) {
+        // Single date
         selectedDate = parseUzbekistanDate(dateParam);
         
-        // Debug log
         console.log('🔍 Audit Log Query:', {
           dateParam,
           startDate: selectedDate.toISOString(),
           endDate: getUzbekistanDayEnd(dateParam).toISOString(),
         });
       } else {
+        // Default: today
         selectedDate = new Date();
-      }
-      
-      if (isNaN(selectedDate.getTime())) {
-        return next(BaseError.BadRequest("Noto'g'ri sana formati"));
       }
 
       // Limit parametri (default: 100, max: 500)
@@ -53,8 +69,11 @@ class AuditLogController {
       const entity = req.query.entity as string | undefined;
       const managerId = req.query.managerId as string | undefined;
       const employeeId = req.query.employeeId as string | undefined;
+      const search = req.query.search as string | undefined;
+      const minAmount = req.query.minAmount ? parseFloat(req.query.minAmount as string) : undefined;
+      const maxAmount = req.query.maxAmount ? parseFloat(req.query.maxAmount as string) : undefined;
       
-      console.log("🔍 Audit Log Filters:", { action, entity, managerId, employeeId });
+      console.log("🔍 Audit Log Filters:", { action, entity, managerId, employeeId, search, minAmount, maxAmount });
       
       const activities = await auditLogService.getDailyActivity(
         selectedDate, 
@@ -64,6 +83,11 @@ class AuditLogController {
           entity,
           managerId,
           employeeId,
+          search,
+          startDate,
+          endDate,
+          minAmount,
+          maxAmount,
         }
       );
       

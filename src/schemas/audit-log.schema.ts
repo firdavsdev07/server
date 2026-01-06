@@ -69,6 +69,16 @@ export interface IAuditMetadata {
   
   // Mijoz ismi (to'lovlar uchun)
   customerName?: string;
+
+  // ✅ YANGI: Request performance va browser info
+  requestDuration?: number; // Request davomiyligi (ms)
+  browserInfo?: {
+    userAgent: string;
+    isMobile: boolean;
+    browser: string;
+  };
+  errorMessage?: string; // Xatolik xabari
+  stackTrace?: string; // Stack trace
 }
 
 export interface IAuditLog {
@@ -178,6 +188,16 @@ const AuditLogSchema = new Schema<IAuditLog>(
           _id: false,
         },
       ],
+
+      // ✅ YANGI: Performance va browser info
+      requestDuration: Number, // Request davomiyligi (ms)
+      browserInfo: {
+        userAgent: String,
+        isMobile: Boolean,
+        browser: String,
+      },
+      errorMessage: String, // Xatolik xabari
+      stackTrace: String, // Stack trace
     },
     ipAddress: String,
     userAgent: String,
@@ -204,6 +224,26 @@ AuditLogSchema.index({
 }, { 
   name: "idx_daily_activity" 
 }); // Kunlik activity uchun
+
+// ✅ YANGI: Qo'shimcha performance indexes
+AuditLogSchema.index({ 
+  userId: 1, 
+  action: 1, 
+  timestamp: -1 
+}, { 
+  name: "idx_user_action_activity" 
+}); // User bo'yicha filter uchun
+
+AuditLogSchema.index({ 
+  'metadata.customerName': 'text',
+  'metadata.affectedEntities.entityName': 'text'
+}, {
+  name: "idx_search_text",
+  weights: {
+    'metadata.customerName': 10,
+    'metadata.affectedEntities.entityName': 5
+  }
+}); // Search uchun text index
 
 const AuditLog = model<IAuditLog>("AuditLog", AuditLogSchema);
 
