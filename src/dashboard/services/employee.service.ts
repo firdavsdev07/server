@@ -125,25 +125,23 @@ class EmployeeService {
   }
 
   async getManager() {
-    const role = await Role.findOne({
-      name: "manager",
-    });
-    if (!role) return [];
-    const managers = await Employee.find(
+    // ✅ Barcha active xodimlarni qaytarish (admin, manager, moderator)
+    // Audit log'da barcha xodimlar harakatini ko'rish uchun
+    const employees = await Employee.find(
       {
         isDeleted: false,
         isActive: true,
-        role: role._id,
       },
       "_id firstName lastName"
-    );
+    ).populate('role', 'name');
     
     // Frontend uchun fullName qo'shamiz
-    return managers.map((manager) => ({
-      _id: manager._id,
-      firstName: manager.firstName,
-      lastName: manager.lastName,
-      fullName: `${manager.firstName} ${manager.lastName}`,
+    return employees.map((emp) => ({
+      _id: emp._id,
+      firstName: emp.firstName,
+      lastName: emp.lastName,
+      fullName: `${emp.firstName} ${emp.lastName}`,
+      role: emp.role?.name, // Role ham yuboramiz (agar kerak bo'lsa)
     }));
   }
 
