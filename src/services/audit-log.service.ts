@@ -41,7 +41,7 @@ class AuditLogService {
       logger.debug("🔍 Creating audit log with final data:", auditLogData);
 
       const result = await AuditLog.create(auditLogData);
-      
+
       logger.debug(`📝 Audit log created successfully: ${data.action} ${data.entity} by ${data.userId}`, {
         auditLogId: result._id,
         timestamp: result.timestamp
@@ -132,8 +132,8 @@ class AuditLogService {
     paymentType: string,
     targetMonth: number,
     userId: string,
-    metadata?: { 
-      source?: string; 
+    metadata?: {
+      source?: string;
       fileName?: string;
       expectedAmount?: number; // Kutilgan summa
       actualAmount?: number; // Haqiqatda to'langan
@@ -156,7 +156,7 @@ class AuditLogService {
 
     // Entity name'da qarz holatini ko'rsatish
     let entityName = `${customerName} - $${metadata?.actualAmount || amount}`;
-    
+
     if (metadata?.paymentStatus === 'UNDERPAID' && metadata?.remainingAmount) {
       entityName += ` (${targetMonth}-oy, ${metadata.remainingAmount}$ qarz)`;
     } else if (metadata?.paymentStatus === 'OVERPAID' && metadata?.excessAmount) {
@@ -337,7 +337,7 @@ class AuditLogService {
         entityName: customerName,
       },
       {
-        entityType: "customer", 
+        entityType: "customer",
         entityId: customerId,
         entityName: customerName,
       },
@@ -482,7 +482,7 @@ class AuditLogService {
    * @param limit - Maksimal yozuvlar soni
    */
   async getDailyActivity(
-    date?: Date, 
+    date?: Date,
     limit: number = 100,
     filters?: {
       action?: string;
@@ -499,7 +499,7 @@ class AuditLogService {
     // Single date
     if (date) {
       const { getUzbekistanDayEnd } = require('../utils/helpers/date.helper');
-      
+
       const startOfDay = date;
       const dateObj = new Date(date.getTime() + 5 * 60 * 60 * 1000); // +5 soat
       const year = dateObj.getUTCFullYear();
@@ -516,44 +516,53 @@ class AuditLogService {
 
     // ✅ Filterlarni qo'shish
     if (filters) {
+      const andFilters: any[] = [];
+
       if (filters.action) {
-        query.action = filters.action;
+        andFilters.push({ action: filters.action });
       }
       if (filters.entity) {
-        query.entity = filters.entity;
+        andFilters.push({ entity: filters.entity });
       }
       if (filters.employeeId) {
         try {
-          query.userId = new Types.ObjectId(filters.employeeId);
+          const empId = new Types.ObjectId(filters.employeeId);
+          andFilters.push({
+            $or: [
+              { userId: empId },
+              { 'metadata.paymentCreatorId': filters.employeeId }
+            ]
+          });
         } catch (error) {
           console.error("❌ Invalid employeeId format:", filters.employeeId);
         }
       }
       if (filters.search) {
-        // Search in customerName and affectedEntities.entityName
-        query.$or = [
-          { 'metadata.customerName': { $regex: filters.search, $options: 'i' } },
-          { 'metadata.affectedEntities.entityName': { $regex: filters.search, $options: 'i' } }
-        ];
+        andFilters.push({
+          $or: [
+            { 'metadata.customerName': { $regex: filters.search, $options: 'i' } },
+            { 'metadata.affectedEntities.entityName': { $regex: filters.search, $options: 'i' } }
+          ]
+        });
       }
       if (filters.minAmount !== undefined || filters.maxAmount !== undefined) {
-        // Amount range filter
-        query['metadata.amount'] = {};
-        if (filters.minAmount !== undefined) {
-          query['metadata.amount'].$gte = filters.minAmount;
-        }
-        if (filters.maxAmount !== undefined) {
-          query['metadata.amount'].$lte = filters.maxAmount;
-        }
+        const amountQuery: any = {};
+        if (filters.minAmount !== undefined) amountQuery.$gte = filters.minAmount;
+        if (filters.maxAmount !== undefined) amountQuery.$lte = filters.maxAmount;
+        andFilters.push({ 'metadata.amount': amountQuery });
+      }
+
+      if (andFilters.length > 0) {
+        query.$and = andFilters;
       }
     }
 
     const activities = await AuditLog.find(query)
-    .select('-userAgent -ipAddress') // Keraksiz fieldlarni o'chirish
-    .populate("userId", "firstName lastName role")
-    .sort({ timestamp: -1 })
-    .limit(limit)
-    .lean();
+      .select('-userAgent -ipAddress') // Keraksiz fieldlarni o'chirish
+      .populate("userId", "firstName lastName role")
+      .sort({ timestamp: -1 })
+      .limit(limit)
+      .lean();
 
     return activities;
   }
@@ -566,9 +575,9 @@ class AuditLogService {
       entity: entityType,
       entityId,
     })
-    .populate("userId", "firstName lastName role")
-    .sort({ timestamp: -1 })
-    .lean();
+      .populate("userId", "firstName lastName role")
+      .sort({ timestamp: -1 })
+      .lean();
 
     return history;
   }
@@ -580,10 +589,10 @@ class AuditLogService {
     const activity = await AuditLog.find({
       userId: new Types.ObjectId(userId),
     })
-    .populate("userId", "firstName lastName role")
-    .sort({ timestamp: -1 })
-    .limit(limit)
-    .lean();
+      .populate("userId", "firstName lastName role")
+      .sort({ timestamp: -1 })
+      .limit(limit)
+      .lean();
 
     return activity;
   }
