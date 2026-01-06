@@ -131,15 +131,15 @@ class ExcelImportService {
       const utc_days = Math.floor(dateStr - 25569);
       const utc_value = utc_days * 86400; // seconds
       const date_info = new Date(utc_value * 1000); // milliseconds
-      
+
       // ✅ TUZATISH: UTC qiymatlarni Date.UTC yordamida to'g'ri yaratish
       // Bu local timezone ta'sirini to'liq olib tashlaydi
       const year = date_info.getUTCFullYear();
       const month = date_info.getUTCMonth();
       const day = date_info.getUTCDate();
       const localDate = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
-      
-      logger.debug(`  📅 Excel serial ${dateStr} → ${dayjs(localDate).format('YYYY-MM-DD')} (UTC: ${year}-${(month+1).toString().padStart(2,'0')}-${day.toString().padStart(2,'0')})`);
+
+      logger.debug(`  📅 Excel serial ${dateStr} → ${dayjs(localDate).format('YYYY-MM-DD')} (UTC: ${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')})`);
       return localDate;
     }
 
@@ -331,7 +331,7 @@ class ExcelImportService {
         payments.push({
           month,
           year,
-          amount: parseFloat(value),
+          amount: Math.round(parseFloat(value)),
         });
       }
     }
@@ -788,10 +788,10 @@ class ExcelImportService {
         );
 
         // 3. Shartnoma ma'lumotlarini parse qilish
-        const initialPayment = parseFloat(row[7]) || 0;
+        const initialPayment = Math.round(parseFloat(row[7]) || 0);
         const period = parseInt(row[8]) || 12;
-        const monthlyPayment = parseFloat(row[9]) || 0;
-        const excelTotalPrice = parseFloat(row[10]) || 0;
+        const monthlyPayment = Math.round(parseFloat(row[9]) || 0);
+        const excelTotalPrice = Math.round(parseFloat(row[10]) || 0);
 
         // ✅ YANGI: totalPrice validatsiyasi va qayta hisoblash
         // Hisoblangan qiymat: initialPayment + (monthlyPayment × period)
@@ -822,13 +822,13 @@ class ExcelImportService {
           nextPaymentDate: this.parseDate(row[2]),
           customer: customerId,
           productName: row[4] || "Unknown",
-          originalPrice: parseFloat(row[5]) || 0,
-          price: parseFloat(row[6]) || 0,
+          originalPrice: Math.round(parseFloat(row[5]) || 0),
+          price: Math.round(parseFloat(row[6]) || 0),
           initialPayment: initialPayment,
           period: period,
           monthlyPayment: monthlyPayment,
           totalPrice: finalTotalPrice, // ✅ FIXED: Validatsiya qilingan qiymat
-          percentage: parseFloat(row[11]) || 30,
+          percentage: Math.round(parseFloat(row[11]) || 30),
           notes: row[12] || "",
           box: row[13] === "1" || row[13] === "true",
           mbox: row[14] === "1" || row[14] === "true",
@@ -1015,7 +1015,7 @@ class ExcelImportService {
         // ✅ TUZATILDI: Qolgan oylar uchun to'lovlar YARATILMAYDI
         // Sabab: Excel import faqat to'langan to'lovlar uchun
         // Qolgan oylar uchun to'lovlar keyinchalik (to'lov qilinganda) yaratiladi
-        
+
         logger.debug(`  ℹ️ Excel import: Faqat to'langan to'lovlar import qilindi`);
 
         successCount++;

@@ -52,12 +52,10 @@ export class PaymentCreatorHelper {
     // Notes yaratish
     let finalNoteText =
       noteText ||
-      `${monthNumber}-oy to'lovi: ${actualAmount.toFixed(2)} $`;
+      `${monthNumber}-oy to'lovi: ${Math.round(actualAmount)} $`;
 
     if (paymentStatus === PaymentStatus.UNDERPAID) {
-      finalNoteText += `\n⚠️ Kam to'landi: ${shortageAmount.toFixed(
-        2
-      )} $ qoldi`;
+      finalNoteText += `\n⚠️ Kam to'landi: ${Math.round(shortageAmount)} $ qoldi`;
     }
 
     const notes = await Notes.create({
@@ -68,8 +66,8 @@ export class PaymentCreatorHelper {
 
     // Payment yaratish
     const payment = await Payment.create({
-      amount: monthlyPayment,
-      actualAmount: actualAmount,
+      amount: Math.round(monthlyPayment),
+      actualAmount: Math.round(actualAmount),
       date: new Date(),
       isPaid: isPaid,
       paymentType: PaymentType.MONTHLY,
@@ -77,8 +75,8 @@ export class PaymentCreatorHelper {
       managerId: managerId,
       notes: notes._id,
       status: paymentStatus,
-      expectedAmount: monthlyPayment,
-      remainingAmount: shortageAmount,
+      expectedAmount: Math.round(monthlyPayment),
+      remainingAmount: Math.round(shortageAmount),
       excessAmount: 0,
       confirmedAt: isPaid ? new Date() : undefined,
       confirmedBy: isPaid ? user.sub : undefined,
@@ -150,7 +148,7 @@ export class PaymentCreatorHelper {
       // ✅ MUHIM: status SCHEDULED - kassada ko'rinmaydi
       // Bu faqat kelgusida to'lanishi kerak bo'lgan rejalashtirilgan to'lov
       const payment = await Payment.create({
-        amount: monthlyPayment,
+        amount: Math.round(monthlyPayment),
         actualAmount: 0, // Hali to'lanmagan
         date: paymentDate, // ✅ MUHIM: Haqiqiy to'lov sanasi (o'zgarmasligi kerak!)
         isPaid: false,
@@ -159,8 +157,8 @@ export class PaymentCreatorHelper {
         managerId: managerId,
         notes: notes._id,
         status: PaymentStatus.SCHEDULED, // ✅ TUZATISH: SCHEDULED - kassada ko'rinmaydi
-        expectedAmount: monthlyPayment,
-        remainingAmount: monthlyPayment, // To'liq summa qolgan
+        expectedAmount: Math.round(monthlyPayment),
+        remainingAmount: Math.round(monthlyPayment), // To'liq summa qolgan
         excessAmount: 0,
         targetMonth: month, // ✅ MUHIM: Qaysi oy
         reminderDate: null, // ✅ Manager belgilashi mumkin
@@ -219,9 +217,7 @@ export class PaymentCreatorHelper {
       const paymentAmount = Math.min(remainingAmount, monthlyPayment);
 
       const noteText = notePrefix
-        ? `${notePrefix} - ${monthNumber}-oy to'lovi: ${paymentAmount.toFixed(
-          2
-        )} $`
+        ? `${notePrefix} - ${monthNumber}-oy to'lovi: ${Math.round(paymentAmount)} $`
         : undefined;
 
       const payment = await this.createMonthlyPayment({

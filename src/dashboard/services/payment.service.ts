@@ -143,10 +143,8 @@ class PaymentService {
 
       // Notes yaratish
       const notes = await Notes.create({
-        text: `${monthNumber}-oy to'lovi (ortiqcha summadan): ${paymentAmount.toFixed(
-          2
-        )} $${shortageAmount > 0
-          ? `\n⚠️ ${shortageAmount.toFixed(2)} $ kam to'landi`
+        text: `${monthNumber}-oy to'lovi (ortiqcha summadan): ${Math.round(paymentAmount)} $${shortageAmount > 0
+          ? `\n⚠️ ${Math.round(shortageAmount)} $ kam to'landi`
           : ""
           }`,
         customer: payment.customerId,
@@ -155,8 +153,8 @@ class PaymentService {
 
       // Payment yaratish
       const newPayment = await Payment.create({
-        amount: monthlyPayment,
-        actualAmount: paymentAmount,
+        amount: Math.round(monthlyPayment),
+        actualAmount: Math.round(paymentAmount),
         date: new Date(),
         isPaid: true,
         paymentType: PaymentType.MONTHLY,
@@ -164,8 +162,8 @@ class PaymentService {
         managerId: payment.managerId,
         notes: notes._id,
         status: paymentStatus,
-        expectedAmount: monthlyPayment,
-        remainingAmount: shortageAmount,
+        expectedAmount: Math.round(monthlyPayment),
+        remainingAmount: Math.round(shortageAmount),
         excessAmount: 0,
         confirmedAt: new Date(),
         confirmedBy: user.sub,
