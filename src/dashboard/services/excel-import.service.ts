@@ -198,8 +198,8 @@ class ExcelImportService {
       return new Date(year, month - 1, day);
     }
 
-    // Boshqa formatlar: "2025-05-07" yoki "5/7/2025"
-    let parsed = dayjs(dateString, ["M/D/YYYY", "YYYY-MM-DD", "DD/MM/YYYY", "D/M/YYYY"], true);
+    // Boshqa formatlar: "07/05/2025" (7-may) yoki "2025-05-07"
+    let parsed = dayjs(dateString, ["DD/MM/YYYY", "D/M/YYYY", "YYYY-MM-DD", "M/D/YYYY", "M/D/YY"], true);
 
     if (!parsed.isValid()) {
       // Agar parse bo'lmasa, hozirgi sanani qaytarish
@@ -817,10 +817,31 @@ class ExcelImportService {
           logger.debug(`    Using Excel value: ${excelTotalPrice}$`);
         }
 
+        // ✅ TUZATISH: initialPaymentDueDate = row[1] dan kun raqamini olish
+        // Excel'da bu column faqat kun raqami (1-31) sifatida saqlanadi, masalan: 18
+        // Bu har oy to'lov qilinadigan kunni bildiradi
+        const paymentDayFromExcel = row[1] ? parseInt(String(row[1])) : null;
+        const nextPaymentDateParsed = this.parseDate(row[2]);
+
+        // Agar Excel'da kun berilgan bo'lsa, o'sha kunni ishlatamiz
+        // Aks holda nextPaymentDate dagi kunni ishlatamiz
+        let initialPaymentDueDateValue: Date;
+        if (paymentDayFromExcel && paymentDayFromExcel >= 1 && paymentDayFromExcel <= 31) {
+          // nextPaymentDate ni asos qilib, o'sha oydagi berilgan kunni o'rnatamiz
+          initialPaymentDueDateValue = dayjs(nextPaymentDateParsed)
+            .date(paymentDayFromExcel)
+            .toDate();
+          logger.debug(`  📅 initialPaymentDueDate from Excel: day ${paymentDayFromExcel} → ${dayjs(initialPaymentDueDateValue).format('YYYY-MM-DD')}`);
+        } else {
+          // Fallback: nextPaymentDate dan olamiz
+          initialPaymentDueDateValue = nextPaymentDateParsed;
+          logger.debug(`  📅 initialPaymentDueDate fallback: ${dayjs(initialPaymentDueDateValue).format('YYYY-MM-DD')}`);
+        }
+
         const contractData = {
-          startDate: contractStartDate, // ✅ Oldindan parse qilingan sana
-          initialPaymentDueDate: contractStartDate, // ✅ FIXED: startDate bilan bir xil
-          nextPaymentDate: this.parseDate(row[2]),
+          startDate: contractStartDate, // ✅ Shartnoma boshlanish sanasi
+          initialPaymentDueDate: initialPaymentDueDateValue, // ✅ TUZATILDI: Har oy to'lanadigan kun
+          nextPaymentDate: nextPaymentDateParsed,
           customer: customerId,
           productName: row[4] || "Unknown",
           originalPrice: Math.round(parseFloat(row[5]) || 0),

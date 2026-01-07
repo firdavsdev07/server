@@ -108,7 +108,7 @@ class ContractService {
       // For now, we'll do basic analysis here
       const Payment = (await import("../../schemas/payment.schema")).default;
       const { PaymentType } = await import("../../schemas/payment.schema");
-      
+
       const impact = {
         underpaidCount: 0,
         overpaidCount: 0,
@@ -225,9 +225,12 @@ class ContractService {
       const nextPaymentDate = new Date(contractStartDate);
       nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
 
-      // ✅ TUZATISH: originalPaymentDay ni o'rnatish
-      const originalPaymentDay = contractStartDate.getDate();
-      logger.debug(`📅 Setting originalPaymentDay: ${originalPaymentDay}`);
+      // ✅ TUZATISH: originalPaymentDay va initialPaymentDueDate ni to'g'ri o'rnatish
+      // Agar initialPaymentDueDate berilgan bo'lsa, undan kunni olamiz (bu to'lov kuni)
+      const paymentDueDate = initialPaymentDueDate ? new Date(initialPaymentDueDate) : nextPaymentDate;
+      const originalPaymentDay = paymentDueDate.getDate();
+
+      logger.debug(`📅 Setting originalPaymentDay from ${initialPaymentDueDate ? 'initialPaymentDueDate' : 'nextPaymentDate'}: ${originalPaymentDay}`);
 
       const contract = new Contract({
         customer,
@@ -238,12 +241,12 @@ class ContractService {
         percentage,
         period,
         monthlyPayment,
-        initialPaymentDueDate: contractStartDate,
+        initialPaymentDueDate: paymentDueDate,
         notes: newNotes._id,
         totalPrice,
         startDate: contractStartDate,
         nextPaymentDate: nextPaymentDate,
-        originalPaymentDay: originalPaymentDay, // ✅ TUZATISH: originalPaymentDay qo'shildi
+        originalPaymentDay: originalPaymentDay, // ✅ FIXED: Har oy to'lanadigan kun raqami
         isActive: true,
         createBy: createBy._id,
         info: {
@@ -367,8 +370,11 @@ class ContractService {
       const nextPaymentDate = new Date(contractStartDate);
       nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
 
-      // ✅ TUZATISH: originalPaymentDay ni o'rnatish
-      const originalPaymentDay = contractStartDate.getDate();
+      // ✅ TUZATISH: originalPaymentDay va initialPaymentDueDate ni to'g'ri o'rnatish
+      const paymentDueDate = initialPaymentDueDate
+        ? new Date(initialPaymentDueDate)
+        : nextPaymentDate;
+      const originalPaymentDay = paymentDueDate.getDate();
 
       const contract = new Contract({
         customer,
@@ -379,12 +385,12 @@ class ContractService {
         percentage,
         period,
         monthlyPayment,
-        initialPaymentDueDate: contractStartDate,
+        initialPaymentDueDate: paymentDueDate,
         notes: newNotes._id,
         totalPrice,
         startDate: contractStartDate,
         nextPaymentDate: nextPaymentDate,
-        originalPaymentDay: originalPaymentDay, // ✅ TUZATISH: originalPaymentDay qo'shildi
+        originalPaymentDay: originalPaymentDay, // ✅ FIXED: Har oy to'lanadigan kun raqami
         isActive: false, // ⚠️ Needs approval
         createBy: createBy._id,
         info: {
@@ -509,7 +515,7 @@ class ContractService {
 
       // 4. Import cascade delete handler
       const { cascadeDeleteContract } = await import("../../middlewares/cascade.middleware");
-      
+
       // 5. Execute cascade delete (will handle payments and debtors)
       await cascadeDeleteContract(contractId);
 
@@ -533,7 +539,7 @@ class ContractService {
       const employee = await Employee.findById(user.sub).populate("role");
       const employeeName = employee ? `${employee.firstName} ${employee.lastName}` : "Unknown";
       const employeeRole = (employee?.role as any)?.name || "unknown";
-      
+
       await auditLogService.logContractDelete(
         contractId,
         customerData._id.toString(),
@@ -632,7 +638,7 @@ class ContractService {
       // 6. Audit log BEFORE deleting contract
       const customerData = contract.customer as any;
       const employeeName = employee ? `${employee.firstName} ${employee.lastName}` : "Unknown";
-      
+
       await auditLogService.logContractDelete(
         contractId,
         customerData._id.toString(),

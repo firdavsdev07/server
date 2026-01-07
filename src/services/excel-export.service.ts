@@ -135,12 +135,21 @@ class ExcelExportService {
         const totalPrice = Math.round((contract.initialPayment || 0) + (monthlyPayment * (contract.period || 12)));
 
         // ✅ nextPaymentDate - birinchi oylik to'lov sanasi (startDate + 1 oy)
-        const firstPaymentDate = dayjs(contract.startDate).add(1, 'month').format("M/D/YYYY");
+        const firstPaymentDate = dayjs(contract.startDate).add(1, 'month').format("DD/MM/YYYY");
+
+        // ✅ To'lov kuni (initialPaymentDueDate dagi kun)
+        let paymentDay = contract.originalPaymentDay;
+        if (!paymentDay && contract.initialPaymentDueDate) {
+          paymentDay = dayjs(contract.initialPaymentDueDate).date();
+        }
+        if (!paymentDay) {
+          paymentDay = dayjs(contract.startDate).date();
+        }
 
         const row: any[] = [
-          dayjs(contract.startDate).format("M/D/YYYY"),              // row[0] - Shartnoma sanasi (6/18/2025)
-          dayjs(contract.startDate).date(),                          // row[1] - Kun raqami (18)
-          firstPaymentDate,                                          // row[2] - Birinchi to'lov (7/18/2025)
+          dayjs(contract.startDate).format("DD/MM/YYYY"),              // row[0] - Shartnoma sanasi (18/06/2025)
+          paymentDay,                                                // row[1] - Kun raqami (18)
+          firstPaymentDate,                                          // row[2] - Birinchi to'lov (18/07/2025)
           customer?.fullName || "Unknown",                           // row[3] - Mijoz
           contract.productName || "",                                // row[4] - Mahsulot
           Math.round(contract.originalPrice || 0),                   // row[5] - Asl narx

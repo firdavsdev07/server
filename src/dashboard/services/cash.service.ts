@@ -52,7 +52,7 @@ class CashService {
             let contract = await Contract.findOne({
               payments: payment._id,
             })
-              .select("_id productName customer")
+              .select("_id productName customer initialPaymentDueDate originalPaymentDay startDate")
               .populate("customer", "fullName")
               .lean();
 
@@ -62,7 +62,7 @@ class CashService {
                 customer: payment.customerId._id || payment.customerId,
                 status: "active", // Faqat faol shartnomalar
               })
-                .select("_id productName customer")
+                .select("_id productName customer initialPaymentDueDate originalPaymentDay startDate")
                 .populate("customer", "fullName")
                 .sort({ createdAt: -1 }) // Eng yangi shartnomani olish
                 .lean();
@@ -85,6 +85,9 @@ class CashService {
             return {
               ...payment,
               contractId: contract?._id?.toString() || null,
+              initialPaymentDueDate: contract?.initialPaymentDueDate || null,
+              originalPaymentDay: contract?.originalPaymentDay || null,
+              contractStartDate: contract?.startDate || null,
             };
           } catch (error) {
             logger.error(
