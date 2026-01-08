@@ -10,6 +10,7 @@ export class CreateCustomerDtoForSeller {
   @IsNotEmpty({ message: "Mijoz ismi bo'sh bo'lmasligi kerak" })
   fullName: string;
 
+  
   @IsOptional()
   @IsString({ message: "Telefon raqam satr bo'lishi kerak" })
   phoneNumber: string;
