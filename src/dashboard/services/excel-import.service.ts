@@ -195,7 +195,8 @@ class ExcelImportService {
         return new Date();
       }
 
-      return new Date(year, month - 1, day);
+      // ✅ TUZATISH: Date.UTC ishlatish (timezone muammosini hal qilish)
+      return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
     }
 
     // Boshqa formatlar: "07/05/2025" (7-may) yoki "2025-05-07"
@@ -818,23 +819,32 @@ class ExcelImportService {
         }
 
         // ✅ TUZATISH: initialPaymentDueDate = row[1] dan kun raqamini olish
-        // Excel'da bu column faqat kun raqami (1-31) sifatida saqlanadi, masalan: 18
+        // Excel'da bu column faqat kun raqami (1-31) sifatida saqlanadi, masalan: 4, 10, 18
         // Bu har oy to'lov qilinadigan kunni bildiradi
         const paymentDayFromExcel = row[1] ? parseInt(String(row[1])) : null;
         const nextPaymentDateParsed = this.parseDate(row[2]);
 
-        // Agar Excel'da kun berilgan bo'lsa, o'sha kunni ishlatamiz
-        // Aks holda nextPaymentDate dagi kunni ishlatamiz
+        // ✅ YANGI: originalPaymentDay ni Excel'dan olish (bu asosiy kun!)
+        let originalPaymentDay: number;
         let initialPaymentDueDateValue: Date;
+
         if (paymentDayFromExcel && paymentDayFromExcel >= 1 && paymentDayFromExcel <= 31) {
-          // nextPaymentDate ni asos qilib, o'sha oydagi berilgan kunni o'rnatamiz
+          // Excel'da kun berilgan - bu har oy to'lanadigan asl kun
+          originalPaymentDay = paymentDayFromExcel;
+          
+          // initialPaymentDueDate ni nextPaymentDate oyida, lekin berilgan kun bilan yaratamiz
           initialPaymentDueDateValue = dayjs(nextPaymentDateParsed)
             .date(paymentDayFromExcel)
             .toDate();
-          logger.debug(`  📅 initialPaymentDueDate from Excel: day ${paymentDayFromExcel} → ${dayjs(initialPaymentDueDateValue).format('YYYY-MM-DD')}`);
+          
+          logger.debug(`  📅 originalPaymentDay from Excel: ${originalPaymentDay}`);
+          logger.debug(`  📅 initialPaymentDueDate: ${dayjs(initialPaymentDueDateValue).format('YYYY-MM-DD')}`);
         } else {
-          // Fallback: nextPaymentDate dan olamiz
+          // Fallback: nextPaymentDate dan kun olish
+          originalPaymentDay = dayjs(nextPaymentDateParsed).date();
           initialPaymentDueDateValue = nextPaymentDateParsed;
+          
+          logger.debug(`  📅 originalPaymentDay fallback from nextPaymentDate: ${originalPaymentDay}`);
           logger.debug(`  📅 initialPaymentDueDate fallback: ${dayjs(initialPaymentDueDateValue).format('YYYY-MM-DD')}`);
         }
 
@@ -842,6 +852,7 @@ class ExcelImportService {
           startDate: contractStartDate, // ✅ Shartnoma boshlanish sanasi
           initialPaymentDueDate: initialPaymentDueDateValue, // ✅ TUZATILDI: Har oy to'lanadigan kun
           nextPaymentDate: nextPaymentDateParsed,
+          originalPaymentDay: originalPaymentDay, // ✅ YANGI: Asl to'lov kuni (Excel'dan)
           customer: customerId,
           productName: row[4] || "Unknown",
           originalPrice: Math.round(parseFloat(row[5]) || 0),
@@ -880,6 +891,7 @@ class ExcelImportService {
           startDate: contractData.startDate,
           nextPaymentDate: contractData.nextPaymentDate,
           initialPaymentDueDate: contractData.initialPaymentDueDate,
+          originalPaymentDay: contractData.originalPaymentDay, // ✅ YANGI: Asl to'lov kuni
           notes: notes._id,
           status: "active",
           isActive: true,

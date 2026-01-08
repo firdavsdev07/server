@@ -216,6 +216,13 @@ class CustomerService {
               },
             },
             {
+              $project: {
+                _id: 1,
+                originalPaymentDay: 1,  // ✅ originalPaymentDay ni qo'shish
+                createdAt: 1,
+              },
+            },
+            {
               $sort: { createdAt: -1 }, // ✅ TUZATISH: Eng YANGI shartnoma birinchi (oxirgi yaratilgan)
             },
           ],
@@ -251,6 +258,7 @@ class CustomerService {
           createBy: 1,
           createdAt: "$latestContractDate", // ✅ Eng YANGI (oxirgi) shartnoma sanasini qaytarish
           updatedAt: 1,
+          contracts: 1,  // ✅ contracts arrayni qaytarish (originalPaymentDay bilan)
         },
       },
       { $sort: { createdAt: -1 } },
