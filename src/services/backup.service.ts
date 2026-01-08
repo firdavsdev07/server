@@ -24,7 +24,11 @@ class BackupService {
   /**
    * Excel database backup yaratish va Telegram'ga yuborish
    */
-  async createBackup(): Promise<{ success: boolean; message: string; filePath?: string }> {
+  async createBackup(): Promise<{
+    success: boolean;
+    message: string;
+    filePath?: string;
+  }> {
     try {
       logger.info("📊 Starting Excel database backup...");
 
@@ -65,7 +69,10 @@ class BackupService {
         try {
           if (fs.existsSync(excelFilePath)) {
             fs.unlinkSync(excelFilePath);
-            logger.debug("🗑️ Excel backup file deleted after upload:", path.basename(excelFilePath));
+            logger.debug(
+              "🗑️ Excel backup file deleted after upload:",
+              path.basename(excelFilePath)
+            );
           }
         } catch (deleteError: any) {
           logger.warn("⚠️ Failed to delete backup file:", deleteError.message);
@@ -123,23 +130,31 @@ class BackupService {
       }
 
       if (!this.backupBot) {
-        throw new Error("Backup bot not initialized (TELEGRAM_BOT_TOKEN missing)");
+        throw new Error(
+          "Backup bot not initialized (TELEGRAM_BOT_TOKEN missing)"
+        );
       }
 
       const stats = fs.statSync(filePath);
       const fileSizeKB = (stats.size / 1024).toFixed(0);
 
       const now = new Date();
-      const date = now.toLocaleDateString('uz-UZ'); // 04.01.2026
-      const time = now.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' }); // 17:30
+      const date = now.toLocaleDateString("uz-UZ"); // 04.01.2026
+      const time = now.toLocaleTimeString("uz-UZ", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }); // 17:30
 
-      const caption = `📊 Excel Backup\n\n` +
+      const caption =
+        `📊 Excel Backup\n\n` +
         `📅 ${date}\n` +
         `🕐 ${time}\n` +
         `📦 ${fileSizeKB}KB\n\n` +
         `✅ Import qilishga tayyor`;
 
-      logger.info(`📤 Sending backup to Telegram channel: ${this.telegramChannelId}...`);
+      logger.info(
+        `📤 Sending backup to Telegram channel: ${this.telegramChannelId}...`
+      );
 
       await this.backupBot.telegram.sendDocument(
         this.telegramChannelId,
@@ -170,9 +185,10 @@ class BackupService {
         return;
       }
 
-      const files = fs.readdirSync(exportDir)
-        .filter(file => file.endsWith(".xlsx"))
-        .map(file => path.join(exportDir, file));
+      const files = fs
+        .readdirSync(exportDir)
+        .filter((file) => file.endsWith(".xlsx"))
+        .map((file) => path.join(exportDir, file));
 
       for (const file of files) {
         try {
@@ -183,7 +199,9 @@ class BackupService {
       }
 
       if (files.length > 0) {
-        logger.debug(`🧹 Cleaned all ${files.length} backup file(s) from exports/`);
+        logger.debug(
+          `🧹 Cleaned all ${files.length} backup file(s) from exports/`
+        );
       }
     } catch (error: any) {
       logger.error("❌ Failed to clean exports:", error.message);
@@ -204,7 +222,7 @@ class BackupService {
     // Har 1 daqiqada backup
     setInterval(() => {
       this.createBackup();
-    }, 1 * 60 * 1000); // 1 daqiqa
+    }, 6 * 60 * 60 * 1000); // 6soat
 
     logger.info("✅ Excel backup service started (1 min interval)");
   }
