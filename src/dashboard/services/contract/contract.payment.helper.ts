@@ -12,6 +12,7 @@ import Payment, {
 import Notes from "../../../schemas/notes.schema";
 import Contract, { ContractStatus } from "../../../schemas/contract.schema";
 import IJwtUser from "../../../types/user";
+import { generatePaymentId } from "../../../utils/id-generator";
 
 export class ContractPaymentHelper {
   /**
@@ -35,7 +36,9 @@ export class ContractPaymentHelper {
       await notes.save();
 
       // 2. Payment yaratish (isPaid: true, status: PAID - avtomatik tasdiqlangan)
+      const paymentId = await generatePaymentId();
       const payment = new Payment({
+        paymentId,
         amount,
         date: contract.startDate,
         isPaid: true,
@@ -85,17 +88,17 @@ export class ContractPaymentHelper {
       const notes = await Notes.create({
         text: `Qo'shimcha to'lov: ${paymentMonth} oyi uchun oylik to'lov o'zgarishi tufayli ${amount.toFixed(
           2
-        )} yetishmayapti.\n\nAsosiy to'lov: ${
-          originalPayment.amount
-        }\nYangi oylik to'lov: ${
-          originalPayment.expectedAmount
-        }\nYetishmayapti: ${amount.toFixed(2)}`,
+        )} yetishmayapti.\n\nAsosiy to'lov: ${originalPayment.amount
+          }\nYangi oylik to'lov: ${originalPayment.expectedAmount
+          }\nYetishmayapti: ${amount.toFixed(2)}`,
         customer: contract.customer,
         createBy: originalPayment.managerId,
       });
 
       // 2. Qo'shimcha to'lov yaratish
+      const additionalPaymentId = await generatePaymentId();
       const additionalPayment = await Payment.create({
+        paymentId: additionalPaymentId,
         amount: amount,
         date: new Date(),
         isPaid: false,

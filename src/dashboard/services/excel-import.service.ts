@@ -14,6 +14,7 @@ import { Balance } from "../../schemas/balance.schema";
 import BaseError from "../../utils/base.error";
 import { Types } from "mongoose";
 import auditLogService from "../../services/audit-log.service";
+import { generatePaymentId, generateCustomerId } from "../../utils/id-generator";
 
 dayjs.extend(customParseFormat);
 
@@ -666,7 +667,9 @@ class ExcelImportService {
         createBy: managerId,
       });
 
+      const newPaymentId = await generatePaymentId();
       const paymentDoc = await Payment.create({
+        paymentId: newPaymentId,
         amount: monthPayment.expectedAmount,
         actualAmount: monthPayment.paidAmount,
         date: paymentDate,
@@ -831,19 +834,19 @@ class ExcelImportService {
         if (paymentDayFromExcel && paymentDayFromExcel >= 1 && paymentDayFromExcel <= 31) {
           // Excel'da kun berilgan - bu har oy to'lanadigan asl kun
           originalPaymentDay = paymentDayFromExcel;
-          
+
           // initialPaymentDueDate ni nextPaymentDate oyida, lekin berilgan kun bilan yaratamiz
           initialPaymentDueDateValue = dayjs(nextPaymentDateParsed)
             .date(paymentDayFromExcel)
             .toDate();
-          
+
           logger.debug(`  📅 originalPaymentDay from Excel: ${originalPaymentDay}`);
           logger.debug(`  📅 initialPaymentDueDate: ${dayjs(initialPaymentDueDateValue).format('YYYY-MM-DD')}`);
         } else {
           // Fallback: nextPaymentDate dan kun olish
           originalPaymentDay = dayjs(nextPaymentDateParsed).date();
           initialPaymentDueDateValue = nextPaymentDateParsed;
-          
+
           logger.debug(`  📅 originalPaymentDay fallback from nextPaymentDate: ${originalPaymentDay}`);
           logger.debug(`  📅 initialPaymentDueDate fallback: ${dayjs(initialPaymentDueDateValue).format('YYYY-MM-DD')}`);
         }
@@ -1012,7 +1015,9 @@ class ExcelImportService {
             createBy: managerObjectId,
           });
 
+          const initialPaymentId = await generatePaymentId();
           const initialPayment = await Payment.create({
+            paymentId: initialPaymentId,
             amount: contractData.initialPayment,
             actualAmount: contractData.initialPayment, // ✅ FIXED
             date: contractData.startDate,

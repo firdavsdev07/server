@@ -25,7 +25,7 @@ class CustomerService {
       isActive: true,
       isDeleted: false,
       manager: user.sub,
-    }).select("fullName _id phoneNumber");
+    }).select("fullName _id phoneNumber customerId");
 
 
     if (customers.length > 0) {

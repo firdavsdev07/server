@@ -33,6 +33,7 @@ export enum PaymentMethod {
 }
 
 export interface IPayment {
+  paymentId: string;
   amount: number; // Oylik to'lov (expected amount)
   actualAmount?: number; // ✅ YANGI - Haqiqatda to'langan summa
   date: Date;
@@ -65,6 +66,7 @@ export interface IPayment {
 
 const PaymentSchema = new Schema<IPayment>(
   {
+    paymentId: { type: String, unique: true, sparse: true },
     amount: { type: Number, required: true }, // Oylik to'lov
     actualAmount: { type: Number }, // ✅ YANGI - Haqiqatda to'langan summa
     date: { type: Date, required: true },

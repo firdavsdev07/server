@@ -13,6 +13,7 @@ import IJwtUser from "../../types/user";
 import Employee from "../../schemas/employee.schema";
 import Contract from "../../schemas/contract.schema";
 import { Types } from "mongoose";
+import { generateCustomerId } from "../../utils/id-generator";
 
 class CustomerService {
   async getAllCustomer() {
@@ -75,6 +76,7 @@ class CustomerService {
       },
       {
         $project: {
+          customerId: 1,
           fullName: 1,
           phoneNumber: 1,
           address: 1,
@@ -171,6 +173,7 @@ class CustomerService {
       },
       {
         $project: {
+          customerId: 1,
           fullName: 1,
           phoneNumber: 1,
           address: 1,
@@ -241,6 +244,7 @@ class CustomerService {
       },
       {
         $project: {
+          customerId: 1,
           fullName: 1,
           phoneNumber: 1,
           address: 1,
@@ -334,6 +338,7 @@ class CustomerService {
             {
               $project: {
                 _id: 1,
+                paymentId: 1,
                 amount: 1,
                 actualAmount: 1, 
                 date: 1,
@@ -528,7 +533,11 @@ class CustomerService {
       }
     }
 
+    // Yangi mijoz ID generatsiya qilish
+    const customerId = await generateCustomerId();
+
     const customer = new Customer({
+      customerId,
       fullName: data.fullName,
       phoneNumber: data.phoneNumber,
       address: data.address,
@@ -836,7 +845,11 @@ class CustomerService {
       }
     }
 
+    // Yangi mijoz ID generatsiya qilish
+    const customerId = await generateCustomerId();
+
     const customer = new Customer({
+      customerId,
       fullName: data.fullName,
       phoneNumber: data.phoneNumber,
       address: data.address,

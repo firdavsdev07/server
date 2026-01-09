@@ -46,6 +46,7 @@ export class ContractQueryService {
             {
               $project: {
                 fullName: 1,
+                customerId: 1,
               },
             },
           ],
@@ -57,11 +58,31 @@ export class ContractQueryService {
           localField: "payments",
           foreignField: "_id",
           as: "payments",
+          pipeline: [
+            {
+              $project: {
+                _id: 1,
+                paymentId: 1,
+                amount: 1,
+                actualAmount: 1,
+                date: 1,
+                isPaid: 1,
+                paymentType: 1,
+                status: 1,
+                remainingAmount: 1,
+                excessAmount: 1,
+                expectedAmount: 1,
+                confirmedAt: 1,
+                targetMonth: 1,
+              },
+            },
+          ],
         },
       },
       {
         $addFields: {
           notes: { $ifNull: [{ $arrayElemAt: ["$notes.text", 0] }, null] },
+          customerId: { $arrayElemAt: ["$customer.customerId", 0] },
           customer: {
             $cond: [
               { $gt: [{ $size: "$customer" }, 0] },
@@ -94,13 +115,11 @@ export class ContractQueryService {
                   $filter: {
                     input: "$payments",
                     as: "p",
-                    cond: { $eq: ["$$p.isPaid", true] }
+                    cond: { $eq: ["$p.isPaid", true] }
                   },
                 },
                 as: "pp",
-                // ✅ TUZATISH: Har doim to'langan summa uchun `actualAmount`ni ishlatish.
-                // `actualAmount` mavjud bo'lmagan eski ma'lumotlar uchun `amount`ga qaytish.
-                in: { $ifNull: ["$$pp.actualAmount", "$$pp.amount"] },
+                in: { $ifNull: ["$pp.actualAmount", "$pp.amount"] },
               },
             },
           },
@@ -130,6 +149,7 @@ export class ContractQueryService {
           originalPaymentDay: 1,  // ✅ originalPaymentDay qo'shildi
           status: 1,
           customer: 1,
+          customerId: 1,
           customerName: 1,
           notes: 1,
           payments: 1,
@@ -183,6 +203,7 @@ export class ContractQueryService {
             {
               $project: {
                 fullName: 1,
+                customerId: 1,
                 percent: 1,
                 passportSeries: 1,
                 phoneNumber: 1,
@@ -216,23 +237,12 @@ export class ContractQueryService {
           localField: "createBy",
           foreignField: "_id",
           as: "seller",
-          pipeline: [
-            {
-              $project: {
-                firstName: 1,
-                lastName: 1,
-              },
-            },
-          ],
+          pipeline: [{ $project: { firstName: 1, lastName: 1 } }],
         },
       },
       {
         $addFields: {
-          customerName: {
-            $concat: [
-              "$customer.fullName",
-            ],
-          },
+          customerName: { $concat: ["$customer.fullName"] },
           sellerName: {
             $cond: [
               { $gt: [{ $size: "$seller" }, 0] },
@@ -240,9 +250,7 @@ export class ContractQueryService {
                 $concat: [
                   { $arrayElemAt: ["$seller.firstName", 0] },
                   " ",
-                  {
-                    $ifNull: [{ $arrayElemAt: ["$seller.lastName", 0] }, ""],
-                  },
+                  { $ifNull: [{ $arrayElemAt: ["$seller.lastName", 0] }, ""] },
                 ],
               },
               "N/A",
@@ -278,11 +286,7 @@ export class ContractQueryService {
           isDeleted: 1,
         },
       },
-      {
-        $sort: {
-          createdAt: -1,
-        },
-      },
+      { $sort: { createdAt: -1 } },
     ]);
   }
 
@@ -314,13 +318,7 @@ export class ContractQueryService {
           localField: "customer",
           foreignField: "_id",
           as: "customer",
-          pipeline: [
-            {
-              $project: {
-                fullName: 1,
-              },
-            },
-          ],
+          pipeline: [{ $project: { fullName: 1, customerId: 1 } }],
         },
       },
       {
@@ -329,11 +327,31 @@ export class ContractQueryService {
           localField: "payments",
           foreignField: "_id",
           as: "payments",
+          pipeline: [
+            {
+              $project: {
+                _id: 1,
+                paymentId: 1,
+                amount: 1,
+                actualAmount: 1,
+                date: 1,
+                isPaid: 1,
+                paymentType: 1,
+                status: 1,
+                remainingAmount: 1,
+                excessAmount: 1,
+                expectedAmount: 1,
+                confirmedAt: 1,
+                targetMonth: 1,
+              },
+            },
+          ],
         },
       },
       {
         $addFields: {
           notes: { $ifNull: [{ $arrayElemAt: ["$notes.text", 0] }, null] },
+          customerId: { $arrayElemAt: ["$customer.customerId", 0] },
           customer: {
             $cond: [
               { $gt: [{ $size: "$customer" }, 0] },
@@ -346,12 +364,7 @@ export class ContractQueryService {
               { $gt: [{ $size: "$customer" }, 0] },
               {
                 $concat: [
-                  {
-                    $dateToString: {
-                      format: "%d",
-                      date: "$startDate",
-                    },
-                  },
+                  { $dateToString: { format: "%d", date: "$startDate" } },
                   " ",
                   { $arrayElemAt: ["$customer.fullName", 0] },
                 ],
@@ -366,11 +379,11 @@ export class ContractQueryService {
                   $filter: {
                     input: "$payments",
                     as: "p",
-                    cond: { $eq: ["$$p.isPaid", true] }
+                    cond: { $eq: ["$p.isPaid", true] },
                   },
                 },
                 as: "pp",
-                in: { $ifNull: ["$$pp.actualAmount", "$$pp.amount"] },
+                in: { $ifNull: ["$pp.actualAmount", "$pp.amount"] },
               },
             },
           },
@@ -378,9 +391,7 @@ export class ContractQueryService {
       },
       {
         $addFields: {
-          remainingDebt: {
-            $subtract: ["$totalPrice", "$totalPaid"],
-          },
+          remainingDebt: { $subtract: ["$totalPrice", "$totalPaid"] },
         },
       },
       {
@@ -400,6 +411,7 @@ export class ContractQueryService {
           originalPaymentDay: 1,  // ✅ originalPaymentDay qo'shildi
           status: 1,
           customer: 1,
+          customerId: 1,
           customerName: 1,
           notes: 1,
           payments: 1,
@@ -413,11 +425,7 @@ export class ContractQueryService {
           prepaidBalance: 1,
         },
       },
-      {
-        $sort: {
-          createdAt: -1,
-        },
-      },
+      { $sort: { createdAt: -1 } },
     ]);
   }
 
@@ -452,6 +460,7 @@ export class ContractQueryService {
             {
               $project: {
                 fullName: 1,
+                customerId: 1,
                 percent: 1,
                 passportSeries: 1,
                 phoneNumber: 1,
@@ -502,14 +511,13 @@ export class ContractQueryService {
             },
             {
               $addFields: {
-                notes: {
-                  $ifNull: [{ $arrayElemAt: ["$notes.text", 0] }, ""],
-                },
+                notes: { $ifNull: [{ $arrayElemAt: ["$notes.text", 0] }, ""] },
               },
             },
             {
               $project: {
                 _id: 1,
+                paymentId: 1,
                 amount: 1,
                 actualAmount: 1,
                 date: 1,
@@ -523,6 +531,7 @@ export class ContractQueryService {
                 notes: 1,
                 confirmedAt: 1,
                 confirmedBy: 1,
+                targetMonth: 1,
               },
             },
           ],
@@ -537,13 +546,13 @@ export class ContractQueryService {
                   $filter: {
                     input: "$payments",
                     as: "p",
-                    cond: { $eq: ["$$p.isPaid", true] }
+                    cond: { $eq: ["$p.isPaid", true] },
                   },
                 },
                 as: "pp",
                 // ✅ TUZATISH: Har doim to'langan summa uchun `actualAmount`ni ishlatish.
                 // `actualAmount` mavjud bo'lmagan eski ma'lumotlar uchun `amount`ga qaytish.
-                in: { $ifNull: ["$$pp.actualAmount", "$$pp.amount"] },
+                in: { $ifNull: ["$pp.actualAmount", "$pp.amount"] },
               },
             },
           },
@@ -551,9 +560,7 @@ export class ContractQueryService {
       },
       {
         $addFields: {
-          remainingDebt: {
-            $subtract: ["$totalPrice", "$totalPaid"],
-          },
+          remainingDebt: { $subtract: ["$totalPrice", "$totalPaid"] },
         },
       },
       // Populate editHistory.editedBy
@@ -582,7 +589,7 @@ export class ContractQueryService {
                             $filter: {
                               input: "$editHistoryEmployees",
                               as: "emp",
-                              cond: { $eq: ["$$emp._id", "$$edit.editedBy"] },
+                              cond: { $eq: ["$emp._id", "$edit.editedBy"] },
                             },
                           },
                           0,
@@ -590,15 +597,15 @@ export class ContractQueryService {
                       },
                     },
                     in: {
-                      _id: "$$employee._id",
-                      firstName: "$$employee.firstName",
-                      lastName: "$$employee.lastName",
+                      _id: "$employee._id",
+                      firstName: "$employee.firstName",
+                      lastName: "$employee.lastName",
                     },
                   },
                 },
-                changes: "$$edit.changes",
-                affectedPayments: "$$edit.affectedPayments",
-                impactSummary: "$$edit.impactSummary",
+                changes: "$edit.changes",
+                affectedPayments: "$edit.affectedPayments",
+                impactSummary: "$edit.impactSummary",
               },
             },
           },

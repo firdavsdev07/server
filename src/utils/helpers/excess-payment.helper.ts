@@ -5,6 +5,7 @@ import Payment, {
 import Notes from "../../schemas/notes.schema";
 import IJwtUser from "../../types/user";
 import logger from "../../utils/logger";
+import { generatePaymentId } from "../id-generator";
 
 /**
  * Excess Payment Helper
@@ -71,8 +72,7 @@ export class ExcessPaymentHelper {
       const notes = await Notes.create({
         text: `${monthNumber}-oy to'lovi (ortiqcha summadan): ${paymentAmount.toFixed(
           2
-        )} $${
-          shortageAmount > 0
+        )} $${shortageAmount > 0
             ? `\n⚠️ ${shortageAmount.toFixed(2)} $ kam to'landi`
             : ""
         }`,
@@ -81,7 +81,9 @@ export class ExcessPaymentHelper {
       });
 
       // Payment yaratish
+      const paymentId = await generatePaymentId();
       const newPayment = await Payment.create({
+        paymentId,
         amount: monthlyPayment,
         actualAmount: paymentAmount,
         date: new Date(),

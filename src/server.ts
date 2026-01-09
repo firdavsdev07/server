@@ -12,6 +12,7 @@ import notificationService from "./services/notification.service";
 import backupService from "./services/backup.service";
 import logger from "./utils/logger";
 import { startReminderCleanupCron } from "./cron/reminder-cleanup.cron";
+import { assignMissingIds } from "./utils/assign-missing-ids";
 
 const PORT = process.env.PORT || 3000;
 
@@ -21,6 +22,7 @@ const startServer = async () => {
     await seedRoles();
     await createCurrencyCourse();
     await createSuperAdmin();
+    await assignMissingIds(); // Avtomatik ID berish
 
     app.listen(PORT, () => {
       logger.debug(`Server is running on port ${PORT}`);

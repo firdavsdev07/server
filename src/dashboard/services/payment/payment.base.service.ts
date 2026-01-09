@@ -14,6 +14,7 @@ import IJwtUser from "../../../types/user";
 import BaseError from "../../../utils/base.error";
 import contractQueryService from "../contract/contract.query.service";
 import { PAYMENT_CONSTANTS } from "../../../utils/helpers/payment";
+import { generatePaymentId } from "../../../utils/id-generator";
 
 export class PaymentBaseService {
   /**
@@ -71,7 +72,7 @@ export class PaymentBaseService {
     user: IJwtUser
   ): Promise<any[]> {
     const createdPayments: any[] = [];
-    
+
     if (excessAmount <= PAYMENT_CONSTANTS.TOLERANCE) {
       return createdPayments;
     }
@@ -118,15 +119,16 @@ export class PaymentBaseService {
 
       // Notes yaratish
       const notes = await Notes.create({
-        text: `${monthNumber}-oy to'lovi (ortiqcha summadan): ${paymentAmount.toFixed(2)} $${
-          shortageAmount > 0 ? `\n⚠️ ${shortageAmount.toFixed(2)} $ kam to'landi` : ""
-        }`,
+        text: `${monthNumber}-oy to'lovi (ortiqcha summadan): ${paymentAmount.toFixed(2)} $${shortageAmount > 0 ? `\n⚠️ ${shortageAmount.toFixed(2)} $ kam to'landi` : ""
+          }`,
         customer: payment.customerId,
         createBy: String(payment.managerId),
       });
 
       // Payment yaratish
+      const newPaymentId = await generatePaymentId();
       const newPayment = await Payment.create({
+        paymentId: newPaymentId,
         amount: monthlyPayment,
         actualAmount: paymentAmount,
         date: new Date(),
@@ -185,7 +187,7 @@ export class PaymentBaseService {
         logger.error(`❌ Contract not found during completion check: ${contractId}`);
         return;
       }
-      
+
       const { remainingDebt, status: currentStatus, prepaidBalance } = contractWithTotals;
       const finalRemainingDebt = remainingDebt - (prepaidBalance || 0);
 
@@ -243,7 +245,7 @@ export class PaymentBaseService {
   }): Promise<void> {
     try {
       const auditLogService = (await import("../../../services/audit-log.service")).default;
-      
+
       await auditLogService.createLog({
         action: params.action,
         entity: params.entity,
@@ -252,7 +254,7 @@ export class PaymentBaseService {
         changes: params.changes,
         metadata: params.metadata,
       });
-      
+
       logger.debug("✅ Audit log created");
     } catch (auditError) {
       logger.error("❌ Error creating audit log:", auditError);

@@ -8,6 +8,7 @@ import { PayDebtDto, PayNewDebtDto } from "../../validators/payment";
 import Notes from "../../schemas/notes.schema";
 import { Balance } from "../../schemas/balance.schema";
 import logger from "../../utils/logger";
+import { generatePaymentId } from "../../utils/id-generator";
 
 class PaymentService {
   async updateBalance(
@@ -117,7 +118,9 @@ class PaymentService {
 
     }
 
+    const newPaymentId = await generatePaymentId();
     const paymentDoc = await Payment.create({
+      paymentId: newPaymentId,
       amount: expectedDebtAmount,
       actualAmount: actualAmount,
       date: new Date(),
@@ -256,7 +259,9 @@ class PaymentService {
 
     } else {
       // Yangi to'lov yaratish (agar SCHEDULED to'lov topilmasa)
+      const newPaymentId = await generatePaymentId();
       paymentDoc = await Payment.create({
+        paymentId: newPaymentId,
         amount: expectedMonthlyPayment,
         actualAmount: actualAmount,
         date: new Date(),
@@ -483,7 +488,9 @@ class PaymentService {
         const paymentDueDate = new Date(startDate);
         paymentDueDate.setMonth(paymentDueDate.getMonth() + targetMonth);
 
+        const newPaymentId = await generatePaymentId();
         const newPayment = await Payment.create({
+          paymentId: newPaymentId,
           amount: contract.monthlyPayment,
           date: paymentDueDate,
           isPaid: false,
@@ -497,12 +504,12 @@ class PaymentService {
           reminderDate: reminder,
           reminderComment: reminderComment || null,
         });
-        
+
         // ✅ YANGI: Kassaga eslatma notification yaratish
         const postponedDays = Math.ceil(
           (reminder.getTime() - paymentDueDate.getTime()) / (1000 * 60 * 60 * 24)
         );
-        
+
         // ✅ TUZATILDI: Bir xil Notes'dan foydalanish (dublikat oldini olish)
         const reminderNotification = await Payment.create({
           amount: 0, // Summa yo'q - bu eslatma
@@ -548,16 +555,16 @@ class PaymentService {
           reminderDate: reminder,
           reminderComment: reminderComment || null,
         });
-        
+
         // ✅ YANGI: Kassaga eslatma notification yaratish
         const paymentDate = new Date((payment as any).date);
         const postponedDays = Math.ceil(
           (reminder.getTime() - paymentDate.getTime()) / (1000 * 60 * 60 * 24)
         );
-        
+
         // ✅ TUZATILDI: Mavjud payment'ning notes'idan foydalanish (dublikat oldini olish)
         const existingNotes = await Notes.findById((payment as any).notes);
-        
+
         // Agar mavjud notes bo'lmasa, yangi yaratamiz
         let notesId;
         if (existingNotes) {
@@ -574,7 +581,7 @@ class PaymentService {
           await newNotes.save();
           notesId = newNotes._id;
         }
-        
+
         // ✅ TUZATILDI: Eslatma notification'ni yaratish va Contract'ga qo'shish
         const reminderNotification = await Payment.create({
           amount: 0, // Summa yo'q - bu eslatma
@@ -744,7 +751,7 @@ class PaymentService {
       existingPayment.status = PaymentStatus.PENDING;
       existingPayment.notes = notes._id;
       existingPayment.managerId = manager._id;
-      
+
       // Yangi qolgan qarzni hisoblash
       const newRemainingAmount = remainingAmount - amountPaid;
       const excessAmount = amountPaid > remainingAmount ? amountPaid - remainingAmount : 0;
@@ -829,7 +836,7 @@ class PaymentService {
         payment.notes = notes._id;
         payment.managerId = manager._id;
         payment.remainingAmount = Math.max(0, paymentDue - paymentAmount);
-        
+
         if (paymentAmount > paymentDue) {
           payment.excessAmount = (payment.excessAmount || 0) + (paymentAmount - paymentDue);
         }

@@ -29,6 +29,7 @@ import {
   areAmountsEqual,
   isAmountPositive,
 } from "../../utils/helpers/payment";
+import { generatePaymentId } from "../../utils/id-generator";
 
 interface PaymentDto {
   contractId: string;
@@ -152,7 +153,9 @@ class PaymentService {
       });
 
       // Payment yaratish
+      const newPaymentId = await generatePaymentId();
       const newPayment = await Payment.create({
+        paymentId: newPaymentId,
         amount: Math.round(monthlyPayment),
         actualAmount: Math.round(paymentAmount),
         date: new Date(),
@@ -339,7 +342,9 @@ class PaymentService {
       });
 
       // 2. Payment yaratish - BOT TO'LOVI (PENDING - Kassa tasdiqlashi kerak)
+      const paymentId = await generatePaymentId();
       const payment = await Payment.create({
+        paymentId,
         amount: expectedAmount, // ✅ OYLIK TO'LOV
         actualAmount: actualAmount, // ✅ HAQIQATDA TO'LANGAN SUMMA (prepaid bilan)
         date: new Date(),
@@ -1345,7 +1350,9 @@ class PaymentService {
         scheduledDate.setDate(originalDay);
 
         // Payment yaratish
+        const paymentId = await generatePaymentId();
         const payment = await Payment.create({
+          paymentId,
           amount: monthlyPayment, // Kutilgan summa
           actualAmount: paymentAmount, // Haqiqatda to'langan summa
           date: scheduledDate, // ✅ FIXED: Asl belgilangan sana
@@ -1694,7 +1701,9 @@ class PaymentService {
         });
 
         // Payment yaratish
+        const paymentId = await generatePaymentId();
         const payment = await Payment.create({
+          paymentId,
           amount: monthlyPayment, // Kutilgan summa
           actualAmount: paymentAmount, // Haqiqatda to'langan summa
           date: new Date(),
@@ -1955,7 +1964,9 @@ class PaymentService {
 
         // Payment yaratish
         // ✅ Bot'dan kelsa PENDING, Dashboard'dan kelsa PAID
+        const paymentId = await generatePaymentId();
         const payment = await Payment.create({
+          paymentId,
           amount: contract.monthlyPayment, // Kutilgan summa
           actualAmount: paymentAmount, // Haqiqatda to'langan summa
           date: new Date(),

@@ -5,6 +5,7 @@ import Payment, {
 import Notes from "../../schemas/notes.schema";
 import IJwtUser from "../../types/user";
 import logger from "../../utils/logger";
+import { generatePaymentId } from "../../utils/id-generator";
 
 /**
  * Payment Creator Helper
@@ -65,7 +66,9 @@ export class PaymentCreatorHelper {
     });
 
     // Payment yaratish
+    const paymentId = await generatePaymentId();
     const payment = await Payment.create({
+      paymentId,
       amount: Math.round(monthlyPayment),
       actualAmount: Math.round(actualAmount),
       date: new Date(),
@@ -147,7 +150,9 @@ export class PaymentCreatorHelper {
       // Payment yaratish - isPaid: false, status: SCHEDULED
       // ✅ MUHIM: status SCHEDULED - kassada ko'rinmaydi
       // Bu faqat kelgusida to'lanishi kerak bo'lgan rejalashtirilgan to'lov
+      const paymentId = await generatePaymentId();
       const payment = await Payment.create({
+        paymentId,
         amount: Math.round(monthlyPayment),
         actualAmount: 0, // Hali to'lanmagan
         date: paymentDate, // ✅ MUHIM: Haqiqiy to'lov sanasi (o'zgarmasligi kerak!)

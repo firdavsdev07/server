@@ -5,6 +5,7 @@ import Employee from "../../schemas/employee.schema";
 import { CreateCustomerDtoForSeller } from "../validators/customer";
 import IJwtUser from "../../types/user";
 import { Types } from "mongoose";
+import { generateCustomerId } from "../../utils/id-generator";
 
 class CustomerService {
   // Barcha yangi mijozlarni ko'rish
@@ -48,6 +49,7 @@ class CustomerService {
       },
       {
         $project: {
+          customerId: 1,
           fullName: 1,
           phoneNumber: 1,
           address: 1,
@@ -206,7 +208,10 @@ class CustomerService {
       }
     }
 
+    const customerId = await generateCustomerId();
+
     const customer = new Customer({
+      customerId,
       fullName: data.fullName,
       phoneNumber: data.phoneNumber,
       address: data.address,

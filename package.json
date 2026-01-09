@@ -11,6 +11,7 @@
     "render-start": "node --max-old-space-size=256 dist/server.js",
     "migrate:up": "ts-node src/migrations/run-migration.ts up",
     "migrate:down": "ts-node src/migrations/run-migration.ts down",
+    "migrate:add-ids": "ts-node src/migrations/010-add-custom-ids.ts",
     "deploy:staging": "bash scripts/deploy-staging.sh",
     "deploy:production": "bash scripts/deploy-production.sh",
     "rollback:production": "bash scripts/rollback-production.sh",

@@ -222,7 +222,7 @@ class BackupService {
     // Har 1 daqiqada backup
     setInterval(() => {
       this.createBackup();
-    }, 6 * 60 * 60 * 1000); // 6soat
+    }, 1 * 60 * 1000); // 6soat
 
     logger.info("✅ Excel backup service started (1 min interval)");
   }

@@ -33,6 +33,7 @@ import {
   checkRateLimit,
   sanitizeContractForLogging,
 } from "../contract.service.security";
+import { generatePaymentId } from "../../../utils/id-generator";
 
 export class ContractEditHandler {
   /**
@@ -120,8 +121,8 @@ export class ContractEditHandler {
           if (changePercent > 50) {
             throw BaseError.BadRequest(
               `Oylik to'lovni 50% dan ko'p o'zgartirish mumkin emas. ` +
-                `Hozirgi o'zgarish: ${changePercent.toFixed(1)}%\n` +
-                `Eski qiymat: ${change.oldValue}, Yangi qiymat: ${change.newValue}, Farq: ${change.difference}`
+              `Hozirgi o'zgarish: ${changePercent.toFixed(1)}%\n` +
+              `Eski qiymat: ${change.oldValue}, Yangi qiymat: ${change.newValue}, Farq: ${change.difference}`
             );
           }
         }
@@ -263,17 +264,17 @@ export class ContractEditHandler {
       const notes = await Notes.create({
         text: `Qo'shimcha to'lov: ${paymentMonth} oyi uchun oylik to'lov o'zgarishi tufayli ${amount.toFixed(
           2
-        )} yetishmayapti.\n\nAsosiy to'lov: ${
-          originalPayment.amount
-        }\nYangi oylik to'lov: ${
-          originalPayment.expectedAmount
-        }\nYetishmayapti: ${amount.toFixed(2)}`,
+        )} yetishmayapti.\n\nAsosiy to'lov: ${originalPayment.amount
+          }\nYangi oylik to'lov: ${originalPayment.expectedAmount
+          }\nYetishmayapti: ${amount.toFixed(2)}`,
         customer: contract.customer,
         createBy: originalPayment.managerId,
       });
 
       // 2. Qo'shimcha to'lov yaratish
+      const additionalPaymentId = await generatePaymentId();
       const additionalPayment = await Payment.create({
+        paymentId: additionalPaymentId,
         amount: amount,
         date: new Date(),
         isPaid: false,
@@ -331,9 +332,8 @@ export class ContractEditHandler {
       // 3. Notes yangilash
       initialPayment.notes.text += `\n\n📝 [${new Date().toLocaleDateString(
         "uz-UZ"
-      )}] Boshlang'ich to'lov o'zgartirildi: ${oldAmount} → ${
-        initialPayment.amount
-      }`;
+      )}] Boshlang'ich to'lov o'zgartirildi: ${oldAmount} → ${initialPayment.amount
+        }`;
       initialPayment.reason = PaymentReason.INITIAL_PAYMENT_CHANGE;
 
       await initialPayment.save();
@@ -350,7 +350,7 @@ export class ContractEditHandler {
       if (customer && customer.manager) {
         // Use balance helper from payment helper
         const { Balance } = await import("../../../schemas/balance.schema");
-        
+
         let balance = await Balance.findOne({ managerId: customer.manager._id });
         if (!balance) {
           balance = await Balance.create({
