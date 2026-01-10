@@ -230,6 +230,7 @@ class CustomerService {
             totalPrice: { $ifNull: ["$totalPrice", "$price"] },
             totalPaid: "$totalPaid",
             startDate: "$startDate",
+            originalPaymentDay: "$originalPaymentDay",
             period: "$period",
             paidMonthsCount: "$paidMonthsCount",
             isPending: {
