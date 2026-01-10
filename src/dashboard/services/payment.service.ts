@@ -684,7 +684,7 @@ class PaymentService {
           metadata: {
             paymentId: payment.paymentId, // ✅ To'lov ID
             contractId: contract.contractId, // ✅ Shartnoma ID
-            customerId: customer.customerId, // ✅ Mijoz ID
+            customerId: (contract.customer as any)?.customerId || contract.customer, // ✅ Mijoz ID
             paymentType: "monthly",
             paymentStatus: payment.status,
             amount: payment.actualAmount || payment.amount,
@@ -1180,6 +1180,9 @@ class PaymentService {
             entityId: existingPayment._id.toString(),
             userId: user.sub,
             metadata: {
+              paymentId: existingPayment.paymentId, // ✅ To'lov ID
+              contractId: contract?.contractId, // ✅ Shartnoma ID
+              customerId: (contract?.customer as any)?.customerId, // ✅ Mijoz ID
               paymentType: "remaining",
               paymentStatus: existingPayment.status,
               amount: payData.amount,
@@ -1470,12 +1473,13 @@ class PaymentService {
       // ✅ TUZATISH: Audit log ma'lumotlarini to'plash (transaction ichida)
       auditData.payments = createdPayments.map(p => ({
         _id: p._id.toString(),
+        paymentId: p.paymentId, // ✅ To'lov ID
         status: p.status,
         amount: p.actualAmount || p.amount,
         targetMonth: p.targetMonth,
       }));
-      auditData.contractId = contract._id.toString();
-      auditData.customerId = contract.customer._id?.toString() || contract.customer.toString();
+      auditData.contractId = contract.contractId || contract._id.toString(); // ✅ K0025 formatdagi ID
+      auditData.customerId = contract.customer.customerId || contract.customer._id?.toString() || contract.customer.toString(); // ✅ M0016 formatdagi ID
       auditData.customerName = contract.customer.fullName;
       auditData.contractName = contract.productName || "Contract";
 
