@@ -110,12 +110,12 @@ class AuditLogService {
           {
             entityType: "contract",
             entityId: contractId,
-            entityName: `${customerName} - ${productName}`,
+            entityName: customerName && productName ? `${customerName} - ${productName}` : (productName || customerName || "Contract"), // ✅ Fallback
           },
           {
             entityType: "customer",
             entityId: customerId,
-            entityName: customerName,
+            entityName: customerName || "Customer", // ✅ Fallback
           },
         ],
       },

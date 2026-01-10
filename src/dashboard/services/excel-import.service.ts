@@ -955,11 +955,10 @@ class ExcelImportService {
 
         // 🔍 AUDIT LOG: Contract yaratish
         try {
-          const customerFullName = `${contractData.productName}`;
           await auditLogService.logContractCreate(
-            contract._id.toString(),
+            contract.contractId || contract._id.toString(), // ✅ K0025 formatdagi ID
             customerId.toString(),
-            customerFullName,
+            customerName, // ✅ Mijoz ismi (mahsulot nomi emas!)
             contractData.productName,
             contractData.totalPrice,
             managerId.toString(),
