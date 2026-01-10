@@ -103,6 +103,8 @@ class AuditLogService {
       userId,
       metadata: {
         ...metadata,
+        contractId, // ✅ Shartnoma ID
+        customerId, // ✅ Mijoz ID
         totalPrice,
         affectedEntities: [
           {
@@ -145,6 +147,9 @@ class AuditLogService {
     // Payment status va summa ma'lumotlarini metadata'ga qo'shish
     const paymentMetadata = {
       ...metadata,
+      paymentId, // ✅ To'lov ID
+      contractId, // ✅ Shartnoma ID
+      customerId, // ✅ Mijoz ID
       amount: metadata?.actualAmount || amount, // Haqiqatda to'langan summa
       expectedAmount: metadata?.expectedAmount || amount, // Kutilgan summa
       paymentType,
