@@ -442,6 +442,76 @@ class ExcelImportService {
   }
 
   /**
+   * ✅ YANGI: Qolgan oylar uchun to'lanmagan to'lovlar yaratish
+   * Barcha oylik to'lovlar oldindan yaratiladi (isPaid: false)
+   */
+  private async createRemainingPayments(
+    contract: any,
+    customerId: Types.ObjectId,
+    managerId: Types.ObjectId,
+    monthlyPayment: number,
+    nextPaymentDate: Date,
+    period: number
+  ): Promise<void> {
+    try {
+      await contract.populate("payments");
+
+      // Mavjud oylik to'lovlarning targetMonth'larini olish
+      const existingMonths = new Set(
+        (contract.payments as any[])
+          .filter((p: any) => p.paymentType === "monthly")
+          .map((p: any) => p.targetMonth)
+      );
+
+      const missingMonths: number[] = [];
+      for (let i = 1; i <= period; i++) {
+        if (!existingMonths.has(i)) {
+          missingMonths.push(i);
+        }
+      }
+
+      if (missingMonths.length === 0) {
+        return;
+      }
+
+      logger.debug(`  📝 Creating ${missingMonths.length} remaining payments...`);
+
+      for (const month of missingMonths) {
+        const paymentDate = dayjs(nextPaymentDate)
+          .add(month - 1, "month")
+          .toDate();
+
+        const noteText = `${month}-oy to'lovi - ${dayjs(paymentDate).format("DD.MM.YYYY")}`;
+        const notes = await Notes.create({
+          text: noteText,
+          customer: customerId,
+          createBy: managerId,
+        });
+
+        const payment = new Payment({
+          amount: monthlyPayment,
+          date: paymentDate,
+          isPaid: false,
+          paymentType: PaymentType.MONTHLY,
+          customerId,
+          managerId,
+          notes: notes._id,
+          status: PaymentStatus.SCHEDULED,
+          targetMonth: month,
+        });
+        await payment.save();
+
+        contract.payments.push(payment._id);
+      }
+
+      await contract.save();
+      logger.debug(`  ✅ Created ${missingMonths.length} remaining payments`);
+    } catch (error) {
+      logger.error("  ❌ Error creating remaining payments:", error);
+    }
+  }
+
+  /**
    * Excel to'lov uchun batafsil izoh yaratish
    * ✅ YANGI: Excel'dagi original ma'lumotni izohda ko'rsatish
    */
@@ -848,8 +918,8 @@ class ExcelImportService {
         });
 
         // 4. Shartnoma yaratish
-        // ✅ TUZATISH: createdAt ni startDate ga tenglashtirish
-        const contract = await Contract.create({
+        // ✅ TUZATISH: new Contract + save() ishlatish (pre-save hook ishlashi uchun)
+        const contract = new Contract({
           customer: customerId,
           productName: contractData.productName,
           originalPrice: contractData.originalPrice,
@@ -862,7 +932,7 @@ class ExcelImportService {
           startDate: contractData.startDate,
           nextPaymentDate: contractData.nextPaymentDate,
           initialPaymentDueDate: contractData.initialPaymentDueDate,
-          originalPaymentDay: contractData.originalPaymentDay, // ✅ YANGI: Asl to'lov kuni
+          originalPaymentDay: contractData.originalPaymentDay,
           notes: notes._id,
           status: "active",
           isActive: true,
@@ -875,11 +945,13 @@ class ExcelImportService {
           },
           payments: [],
           createBy: managerObjectId,
-          createdAt: contractData.startDate, // ✅ Excel'dagi shartnoma yaratilgan sanani o'rnatish
-          updatedAt: contractData.startDate, // ✅ Yangilanish sanasini ham o'rnatish
         });
+        // ✅ createdAt/updatedAt ni save() dan keyin o'rnatish
+        contract.set('createdAt', contractData.startDate, { strict: false });
+        contract.set('updatedAt', contractData.startDate, { strict: false });
+        await contract.save();
 
-        logger.debug(`  ✓ Contract created: ${contract._id}`);
+        logger.debug(`  ✓ Contract created: ${contract._id} (${contract.contractId})`);
 
         // 🔍 AUDIT LOG: Contract yaratish
         try {
@@ -1000,14 +1072,18 @@ class ExcelImportService {
         // ✅ YANGI: Contract status va nextPaymentDate tekshirish
         await this.recheckContractStatusAndNextPayment(
           contract,
-          contractData.nextPaymentDate // ✅ TUZATISH: nextPaymentDate uzatildi
+          contractData.nextPaymentDate
         );
 
-        // ✅ TUZATILDI: Qolgan oylar uchun to'lovlar YARATILMAYDI
-        // Sabab: Excel import faqat to'langan to'lovlar uchun
-        // Qolgan oylar uchun to'lovlar keyinchalik (to'lov qilinganda) yaratiladi
-
-        logger.debug(`  ℹ️ Excel import: Faqat to'langan to'lovlar import qilindi`);
+        // ✅ YANGI: Qolgan oylar uchun to'lanmagan to'lovlar yaratish
+        await this.createRemainingPayments(
+          contract,
+          customerId,
+          managerObjectId,
+          contractData.monthlyPayment,
+          contractData.nextPaymentDate,
+          contractData.period
+        );
 
         successCount++;
         logger.debug(`✅ Row ${rowNumber} imported successfully`);

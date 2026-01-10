@@ -33,6 +33,7 @@ export enum PaymentMethod {
 }
 
 export interface IPayment {
+  paymentId?: string; // T0001 formatida - avtomatik yaratiladi
   amount: number; // Oylik to'lov (expected amount)
   actualAmount?: number; // ✅ YANGI - Haqiqatda to'langan summa
   date: Date;
@@ -65,6 +66,7 @@ export interface IPayment {
 
 const PaymentSchema = new Schema<IPayment>(
   {
+    paymentId: { type: String, unique: true, sparse: true }, // T0001 formatida
     amount: { type: Number, required: true }, // Oylik to'lov
     actualAmount: { type: Number }, // ✅ YANGI - Haqiqatda to'langan summa
     date: { type: Date, required: true },
@@ -142,6 +144,30 @@ PaymentSchema.index({ isPaid: 1, status: 1 }, { name: "idx_isPaid_status" });
 
 // Index for date-based sorting and queries
 PaymentSchema.index({ date: -1 }, { name: "idx_date" });
+
+// Pre-save hook: paymentId avtomatik yaratish (T0001 formatida)
+PaymentSchema.pre("save", async function (next) {
+  if (!this.paymentId) {
+    try {
+      const PaymentModel = model<IPayment>("Payment");
+      const lastPayment = await PaymentModel
+        .findOne({ paymentId: { $exists: true, $ne: null } })
+        .sort({ paymentId: -1 })
+        .select("paymentId")
+        .lean();
+
+      if (!lastPayment?.paymentId) {
+        this.paymentId = "T0001";
+      } else {
+        const num = parseInt(lastPayment.paymentId.slice(1)) + 1;
+        this.paymentId = `T${num.toString().padStart(4, "0")}`;
+      }
+    } catch (error) {
+      this.paymentId = "T0001";
+    }
+  }
+  next();
+});
 
 const Payment = model<IPayment>("Payment", PaymentSchema);
 

@@ -50,6 +50,7 @@ export interface IContractEdit {
 }
 
 export interface IContract extends IBase {
+  contractId?: string; // S0001 formatida - avtomatik yaratiladi
   startDate: Date;
   initialPaymentDueDate?: Date;
   nextPaymentDate: Date;
@@ -114,6 +115,7 @@ const ContractEditSchema = new Schema<IContractEdit>(
 
 const ContractSchema = new Schema<IContract>(
   {
+    contractId: { type: String, unique: true, sparse: true }, // S0001 formatida
     customer: {
       type: Schema.Types.ObjectId,
       ref: "Customer",
@@ -166,6 +168,31 @@ const ContractSchema = new Schema<IContract>(
     timestamps: true,
   }
 );
+
+// Pre-save hook: contractId avtomatik yaratish (S0001 formatida)
+ContractSchema.pre("save", async function (next) {
+  if (!this.contractId) {
+    try {
+      const ContractModel = model<IContract>("Contract");
+      const lastContract = await ContractModel
+        .findOne({ contractId: { $exists: true, $ne: null } })
+        .sort({ contractId: -1 })
+        .select("contractId")
+        .lean();
+
+      if (!lastContract?.contractId) {
+        this.contractId = "S0001";
+      } else {
+        const num = parseInt(lastContract.contractId.slice(1)) + 1;
+        this.contractId = `S${num.toString().padStart(4, "0")}`;
+      }
+    } catch (error) {
+      // Agar xato bo'lsa, S0001 dan boshlaymiz
+      this.contractId = "S0001";
+    }
+  }
+  next();
+});
 
 const Contract = model<IContract>("Contract", ContractSchema);
 

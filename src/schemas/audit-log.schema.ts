@@ -67,6 +67,11 @@ export interface IAuditMetadata {
     entityName?: string;
   }[];
   
+  // ✅ YANGI: ID lar (kassa va audit log uchun)
+  contractId?: string; // Shartnoma ID (S0001, S0002...)
+  paymentId?: string; // To'lov ID (T0001, T0002...)
+  customerId?: string; // Mijoz ID (M0001, M0002...)
+  
   // Mijoz ismi (to'lovlar uchun)
   customerName?: string;
 
@@ -175,6 +180,11 @@ const AuditLogSchema = new Schema<IAuditLog>(
       // Employee info
       employeeName: String,
       employeeRole: String,
+      
+      // ✅ YANGI: ID lar (kassa va audit log uchun)
+      contractId: String, // Shartnoma ID (S0001, S0002...)
+      paymentId: String, // To'lov ID (T0001, T0002...)
+      customerId: String, // Mijoz ID (M0001, M0002...)
       
       // Mijoz ismi
       customerName: String,

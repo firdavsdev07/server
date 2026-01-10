@@ -116,6 +116,7 @@ export class ContractQueryService {
       {
         $project: {
           _id: 1,
+          contractId: 1,
           productName: 1,
           originalPrice: 1,
           price: 1,
@@ -386,6 +387,7 @@ export class ContractQueryService {
       {
         $project: {
           _id: 1,
+          contractId: 1,
           productName: 1,
           originalPrice: 1,
           price: 1,
@@ -510,6 +512,7 @@ export class ContractQueryService {
             {
               $project: {
                 _id: 1,
+                paymentId: 1,
                 amount: 1,
                 actualAmount: 1,
                 date: 1,
@@ -523,6 +526,7 @@ export class ContractQueryService {
                 notes: 1,
                 confirmedAt: 1,
                 confirmedBy: 1,
+                targetMonth: 1,
               },
             },
           ],
@@ -607,6 +611,7 @@ export class ContractQueryService {
       {
         $project: {
           _id: 1,
+          contractId: 1,
           productName: 1,
           originalPrice: 1,
           price: 1,

@@ -12,6 +12,9 @@ import notificationService from "./services/notification.service";
 import backupService from "./services/backup.service";
 import logger from "./utils/logger";
 import { startReminderCleanupCron } from "./cron/reminder-cleanup.cron";
+import { ensureContractIds } from "./utils/ensureContractIds";
+import { ensurePaymentIds } from "./utils/ensurePaymentIds";
+import { ensureAllPayments } from "./utils/ensureAllPayments";
 
 const PORT = process.env.PORT || 3000;
 
@@ -21,6 +24,9 @@ const startServer = async () => {
     await seedRoles();
     await createCurrencyCourse();
     await createSuperAdmin();
+    await ensureContractIds();
+    await ensureAllPayments();
+    await ensurePaymentIds();
 
     app.listen(PORT, () => {
       logger.debug(`Server is running on port ${PORT}`);

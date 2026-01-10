@@ -36,7 +36,7 @@ class CashService {
         .populate("managerId", "firstName lastName")
         .populate("notes", "text")
         .select(
-          "_id amount actualAmount date isPaid paymentType paymentMethod notes customerId managerId status remainingAmount excessAmount expectedAmount confirmedAt confirmedBy targetMonth nextPaymentDate reminderDate reminderComment postponedDays isReminderNotification createdAt updatedAt"
+          "_id paymentId amount actualAmount date isPaid paymentType paymentMethod notes customerId managerId status remainingAmount excessAmount expectedAmount confirmedAt confirmedBy targetMonth nextPaymentDate reminderDate reminderComment postponedDays isReminderNotification createdAt updatedAt"
         )
         .sort({ date: -1 })
         .lean();
@@ -52,7 +52,7 @@ class CashService {
             let contract = await Contract.findOne({
               payments: payment._id,
             })
-              .select("_id productName customer initialPaymentDueDate originalPaymentDay startDate")
+              .select("_id contractId productName customer initialPaymentDueDate originalPaymentDay startDate")
               .populate("customer", "fullName")
               .lean();
 
@@ -62,7 +62,7 @@ class CashService {
                 customer: payment.customerId._id || payment.customerId,
                 status: "active", // Faqat faol shartnomalar
               })
-                .select("_id productName customer initialPaymentDueDate originalPaymentDay startDate")
+                .select("_id contractId productName customer initialPaymentDueDate originalPaymentDay startDate")
                 .populate("customer", "fullName")
                 .sort({ createdAt: -1 }) // Eng yangi shartnomani olish
                 .lean();
@@ -84,7 +84,7 @@ class CashService {
 
             return {
               ...payment,
-              contractId: contract?._id?.toString() || null,
+              contractId: contract?.contractId || null,
               initialPaymentDueDate: contract?.initialPaymentDueDate || null,
               originalPaymentDay: contract?.originalPaymentDay || null,
               contractStartDate: contract?.startDate || null,
@@ -105,6 +105,7 @@ class CashService {
       if (paymentsWithContract.length > 0) {
         logger.log("📋 Sample payment:", {
           id: paymentsWithContract[0]._id,
+          paymentId: paymentsWithContract[0].paymentId,
           customer: paymentsWithContract[0].customerId,
           manager: paymentsWithContract[0].managerId,
           amount: paymentsWithContract[0].amount,
