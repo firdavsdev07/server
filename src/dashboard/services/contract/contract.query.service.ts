@@ -426,14 +426,27 @@ export class ContractQueryService {
   /**
    * Get contract by ID with full details
    * Returns: contract with customer, manager, payments, notes, and edit history
+   * @param contractId - Can be either MongoDB ObjectId or contractId string (e.g., "S0001")
    */
   async getContractById(contractId: string) {
+    // Check if contractId is a valid MongoDB ObjectId or a string ID
+    const isObjectId = Types.ObjectId.isValid(contractId) && contractId.length === 24;
+    
+    const matchCondition: any = {
+      isDeleted: false,
+    };
+
+    if (isObjectId) {
+      // If it's a MongoDB ObjectId, search by _id
+      matchCondition._id = new Types.ObjectId(contractId);
+    } else {
+      // If it's a string ID (e.g., "S0001"), search by contractId field
+      matchCondition.contractId = contractId;
+    }
+
     const contract = await Contract.aggregate([
       {
-        $match: {
-          isDeleted: false,
-          _id: new Types.ObjectId(contractId),
-        },
+        $match: matchCondition,
       },
       {
         $lookup: {
