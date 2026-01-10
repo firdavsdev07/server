@@ -135,6 +135,8 @@ class DebtorService {
                 monthlyPayment: "$monthlyPayment",
                 initialPayment: "$initialPayment",
                 startDate: "$startDate",
+                initialPaymentDueDate: "$initialPaymentDueDate", // ✅ YANGI
+                originalPaymentDay: "$originalPaymentDay", // ✅ YANGI
                 nextPaymentDate: "$nextPaymentDate",
                 delayDays: "$delayDays", // ✅ Har bir shartnomaning alohida kechikkan kuni
                 paidMonthsCount: "$paidMonthsCount",

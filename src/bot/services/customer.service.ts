@@ -230,8 +230,11 @@ class CustomerService {
             totalPrice: { $ifNull: ["$totalPrice", "$price"] },
             totalPaid: "$totalPaid",
             startDate: "$startDate",
+            initialPaymentDueDate: "$initialPaymentDueDate", // ✅ YANGI
             originalPaymentDay: "$originalPaymentDay",
             period: "$period",
+            monthlyPayment: "$monthlyPayment", // ✅ YANGI
+            initialPayment: "$initialPayment", // ✅ YANGI
             paidMonthsCount: "$paidMonthsCount",
             isPending: {
               $gt: [
