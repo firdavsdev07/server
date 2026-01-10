@@ -366,6 +366,8 @@ class AuditLogService {
       userId,
       changes,
       metadata: {
+        contractId, // ✅ Shartnoma ID
+        customerId, // ✅ Mijoz ID
         affectedEntities,
       },
     });
@@ -391,6 +393,9 @@ class AuditLogService {
       entityId: paymentId,
       userId,
       metadata: {
+        paymentId, // ✅ To'lov ID
+        contractId, // ✅ Shartnoma ID
+        customerId, // ✅ Mijoz ID
         amount,
         customerName: displayName,
         paymentStatus: action === "confirm" ? "confirmed" : "rejected",
