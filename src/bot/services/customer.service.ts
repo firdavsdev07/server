@@ -224,6 +224,7 @@ class CustomerService {
             phoneNumber: "$customerData.phoneNumber",
             productName: "$productName",
             contractId: "$_id",
+            paymentId: "$nextPaymentData.paymentId", // ✅ YANGI - To'lov ID
             remainingDebt: "$remainingDebt",
             delayDays: "$delayDays",
             nextPaymentDate: "$nextPaymentDate",
@@ -594,6 +595,7 @@ class CustomerService {
       {
         $project: {
           _id: 1,
+          contractId: 1, // ✅ YANGI - Shartnoma ID
           productName: 1,
           totalDebt: 1,
           totalPaid: 1,
@@ -615,6 +617,7 @@ class CustomerService {
               as: "payment",
               in: {
                 _id: "$$payment._id",
+                paymentId: "$$payment.paymentId", // ✅ YANGI - To'lov ID
                 amount: "$$payment.amount",
                 actualAmount: "$$payment.actualAmount",
                 date: "$$payment.date",
