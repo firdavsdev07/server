@@ -104,10 +104,10 @@ CustomerSchema.pre("save", async function (next) {
       .select("customerId");
 
     if (!lastCustomer?.customerId) {
-      this.customerId = "M0001";
+      this.customerId = "M00001"; // ✅ 5 raqam
     } else {
       const num = parseInt(lastCustomer.customerId.slice(1)) + 1;
-      this.customerId = `M${num.toString().padStart(4, "0")}`;
+      this.customerId = `M${num.toString().padStart(5, "0")}`; // ✅ 5 raqam
     }
   }
   next();

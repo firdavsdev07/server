@@ -157,13 +157,13 @@ PaymentSchema.pre("save", async function (next) {
         .lean();
 
       if (!lastPayment?.paymentId) {
-        this.paymentId = "T0001";
+        this.paymentId = "T000001"; // ✅ 5 raqam
       } else {
         const num = parseInt(lastPayment.paymentId.slice(1)) + 1;
-        this.paymentId = `T${num.toString().padStart(4, "0")}`;
+        this.paymentId = `T${num.toString().padStart(6, "0")}`; // ✅ 5 raqam
       }
     } catch (error) {
-      this.paymentId = "T0001";
+      this.paymentId = "T000001";
     }
   }
   next();

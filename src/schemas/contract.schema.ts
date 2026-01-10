@@ -181,14 +181,14 @@ ContractSchema.pre("save", async function (next) {
         .lean();
 
       if (!lastContract?.contractId) {
-        this.contractId = "S0001";
+        this.contractId = "K000001"; // ✅ 5 raqam, K harfi
       } else {
         const num = parseInt(lastContract.contractId.slice(1)) + 1;
-        this.contractId = `S${num.toString().padStart(4, "0")}`;
+        this.contractId = `K${num.toString().padStart(6, "0")}`; // ✅ 5 raqam, K harfi
       }
     } catch (error) {
       // Agar xato bo'lsa, S0001 dan boshlaymiz
-      this.contractId = "S0001";
+      this.contractId = "S000001";
     }
   }
   next();
