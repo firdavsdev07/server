@@ -67,6 +67,40 @@ export const uploadCustomerFiles = multer({
   { name: "photo", maxCount: 1 },
 ]);
 
+// Excel upload middleware
+export const uploadExcelFile = multer({
+  storage: multer.diskStorage({
+    destination: (req: Request, file, cb) => {
+      const dir = "uploads/excel/";
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      cb(null, dir);
+    },
+    filename: (req: Request, file, cb) => {
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      cb(null, `excel-${uniqueSuffix}.xlsx`);
+    },
+  }),
+  fileFilter: (req: Request, file: any, cb: any) => {
+    const allowedTypes = /xlsx|xls/;
+    const extname = allowedTypes.test(
+      path.extname(file.originalname).toLowerCase()
+    );
+    const mimetype = file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+                     file.mimetype === 'application/vnd.ms-excel';
+
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error("Faqat Excel fayllar (.xlsx, .xls) qabul qilinadi"));
+    }
+  },
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB
+  },
+}).single('file');
+
 // Faylni o'chirish funksiyasi
 export const deleteFile = (filePath: string) => {
   try {

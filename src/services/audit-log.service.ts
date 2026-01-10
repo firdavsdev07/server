@@ -376,8 +376,10 @@ class AuditLogService {
     customerName: string,
     action: "confirm" | "reject",
     amount: number,
-    userId: string
+    userId: string,
+    customerCode?: string
   ): Promise<void> {
+    const displayName = customerCode ? `${customerCode} ${customerName}` : customerName;
     await this.createLog({
       action: action === "confirm" ? AuditAction.CONFIRM : AuditAction.REJECT,
       entity: AuditEntity.PAYMENT,
@@ -385,22 +387,23 @@ class AuditLogService {
       userId,
       metadata: {
         amount,
+        customerName: displayName,
         paymentStatus: action === "confirm" ? "confirmed" : "rejected",
         affectedEntities: [
           {
             entityType: "payment",
             entityId: paymentId,
-            entityName: `${customerName} - ${amount}$`,
+            entityName: `${displayName} - ${amount}$`,
           },
           {
             entityType: "contract",
             entityId: contractId,
-            entityName: `Contract: ${customerName}`,
+            entityName: `Contract: ${displayName}`,
           },
           {
             entityType: "customer",
             entityId: customerId,
-            entityName: customerName,
+            entityName: displayName,
           },
         ],
       },

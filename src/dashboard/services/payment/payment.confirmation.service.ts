@@ -220,6 +220,8 @@ export class PaymentConfirmationService extends PaymentBaseService {
       // Audit log yaratish - customerName va paymentCreator bilan
       const customer = await Customer.findById(payment.customerId);
       const customerName = customer?.fullName || "Noma'lum mijoz";
+      const customerCode = customer?.customerId || "";
+      const displayName = customerCode ? `${customerCode} ${customerName}` : customerName;
 
       // ✅ YANGI: Pulni yig'ib to'lovni qilgan odamni olish (managerId)
       await payment.populate('managerId');
@@ -240,6 +242,7 @@ export class PaymentConfirmationService extends PaymentBaseService {
           { field: "confirmedAt", oldValue: null, newValue: payment.confirmedAt }
         ],
         metadata: {
+          customerId: customerCode, // ✅ Mijoz ID (M0001)
           customerName, // ✅ Mijoz ismi
           paymentType: "monthly",
           paymentStatus: payment.status,
@@ -416,10 +419,39 @@ export class PaymentConfirmationService extends PaymentBaseService {
 
       logger.debug("✅ Payment rejected successfully");
 
+      // Audit log yaratish
+      const customer = await Customer.findById(payment.customerId);
+      const customerName = customer?.fullName || "Noma'lum mijoz";
+      const customerCode = customer?.customerId || "";
+      const displayName = customerCode ? `${customerCode} ${customerName}` : customerName;
+
+      await payment.populate('managerId');
+      const paymentCreator = payment.managerId as any;
+      const paymentCreatorName = paymentCreator
+        ? `${paymentCreator.firstName || ''} ${paymentCreator.lastName || ''}`.trim()
+        : "Noma'lum";
+
+      await this.createAuditLog({
+        action: (await import("../../../schemas/audit-log.schema")).AuditAction.REJECT,
+        entity: (await import("../../../schemas/audit-log.schema")).AuditEntity.PAYMENT,
+        entityId: paymentId,
+        userId: user.sub,
+        changes: [
+          { field: "status", oldValue: "PENDING", newValue: "REJECTED" },
+        ],
+        metadata: {
+          customerId: customerCode,
+          customerName,
+          paymentMethod: payment.paymentMethod,
+          amount: payment.actualAmount || payment.amount,
+          targetMonth: payment.targetMonth,
+          paymentCreatorName,
+          rejectReason: reason,
+        }
+      });
+
       // Database notification yaratish
       try {
-        const customer = await Customer.findById(payment.customerId);
-
         if (customer && contract) {
           const botNotificationService = (await import("../../../bot/services/notification.service")).default;
 

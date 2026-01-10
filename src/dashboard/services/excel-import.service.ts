@@ -114,33 +114,26 @@ class ExcelImportService {
 
   /**
    * Sanani parse qilish (Excel formatidan)
-   * ✅ TUZATILDI: Excel serial number'larni to'g'ri handle qilish + Timezone fix
    */
   private parseDate(dateStr: any, isDay: boolean = false): Date {
     if (!dateStr) {
       return new Date();
     }
 
-    // ✅ TUZATILDI: Excel serial number (number) ni Date'ga aylantirish
-    // MUAMMO: Excel sanalarni UTC da saqlaydi, lekin GMT+5 tufayli 1 kun orqaga ketadi
-    // YECHIM: UTC qiymatlarni to'g'ridan-to'g'ri ishlatish (Date.UTC bilan)
+    // Excel serial number'ni Date'ga aylantirish
     if (typeof dateStr === 'number') {
-      // Excel serial number to Date (UTC formatda)
-      // Excel: 1 = 1900-01-01, lekin 1900 leap year bug bor
+      // Excel epoch: 1900-01-01 = 1, lekin 1900 leap year bug
       // 25569 = 1970-01-01 (UNIX epoch)
-      const utc_days = Math.floor(dateStr - 25569);
-      const utc_value = utc_days * 86400; // seconds
-      const date_info = new Date(utc_value * 1000); // milliseconds
-
-      // ✅ TUZATISH: UTC qiymatlarni Date.UTC yordamida to'g'ri yaratish
-      // Bu local timezone ta'sirini to'liq olib tashlaydi
-      const year = date_info.getUTCFullYear();
-      const month = date_info.getUTCMonth();
-      const day = date_info.getUTCDate();
-      const localDate = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
-
-      logger.debug(`  📅 Excel serial ${dateStr} → ${dayjs(localDate).format('YYYY-MM-DD')} (UTC: ${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')})`);
-      return localDate;
+      const excelEpoch = new Date(1900, 0, 1);
+      const days = dateStr - 1; // Excel 1-indexed
+      const date = new Date(excelEpoch.getTime() + days * 24 * 60 * 60 * 1000);
+      
+      // Excel leap year bug fix (1900 was not a leap year)
+      if (dateStr > 59) {
+        date.setTime(date.getTime() - 24 * 60 * 60 * 1000);
+      }
+      
+      return date;
     }
 
     // String formatga aylantirish
@@ -283,9 +276,10 @@ class ExcelImportService {
         logger.debug(`  📅 Setting customer createdAt to: ${dayjs(contractStartDate).format('YYYY-MM-DD')}`);
       }
 
-      customer = await Customer.create(customerData);
+      customer = new Customer(customerData);
+      await customer.save();
 
-      logger.debug(`✅ Created new customer: ${fullName}`);
+      logger.debug(`✅ Created new customer: ${fullName} (${customer.customerId})`);
 
       // 🔍 AUDIT LOG: Customer yaratish
       try {
@@ -376,12 +370,12 @@ class ExcelImportService {
   }
 
   /**
-   * Contract status va nextPaymentDate'ni qayta tekshirish
+   * ✅ Contract status va nextPaymentDate'ni qayta tekshirish
    * Import tugagandan keyin chaqiriladi
    */
   private async recheckContractStatusAndNextPayment(
     contract: any,
-    initialNextPaymentDate: Date // ✅ TUZATISH: startDate o'rniga initialNextPaymentDate
+    nextPaymentDate: Date // ✅ TUZATISH: nextPaymentDate uzatiladi
   ): Promise<void> {
     try {
       logger.debug("  🔍 Rechecking contract status and nextPaymentDate...");
@@ -410,51 +404,32 @@ class ExcelImportService {
         logger.debug("    ✅ Contract status: ACTIVE");
       }
 
-      // ✅ TUZATISH: nextPaymentDate va originalPaymentDay ni to'g'ri hisoblash
-      // Eng oxirgi to'langan oyni topish
-      const paidMonthlyPayments = (contract.payments as any[])
-        .filter(
-          (p: any) =>
-            p.isPaid &&
-            p.paymentType === "monthly" &&
-            p.targetMonth &&
-            p.targetMonth > 0
-        );
+      // ✅ TUZATISH: nextPaymentDate ni to'g'ri o'rnatish
+      // Agar initialPayment > 0 bo'lsa, 1-oy to'lovi nextPaymentDate da
+      // Agar initialPayment = 0 bo'lsa, 1-oy to'lovi ham nextPaymentDate da
+      
+      // Oylik to'lovlar mavjudligini tekshirish
+      const monthlyPayments = (contract.payments as any[])
+        .filter((p: any) => p.paymentType === "monthly" && p.targetMonth && p.targetMonth > 0);
 
-      // Eng oxirgi to'langan oy
-      const lastPaidMonth = paidMonthlyPayments.length > 0
-        ? Math.max(...paidMonthlyPayments.map((p: any) => p.targetMonth || 0))
-        : 0;
+      logger.debug(`    📅 Monthly payments count: ${monthlyPayments.length}`);
 
-      logger.debug(`    📅 Paid monthly payments: ${paidMonthlyPayments.length}`);
-      logger.debug(`    📅 Last paid month: ${lastPaidMonth}`);
-
-      // Keyingi to'lov oyi
-      const nextPaymentMonth = lastPaidMonth + 1;
-
-      // ✅ YANGI: originalPaymentDay ni o'rnatish (nextPaymentDate dan kunni olish)
-      const originalDay = contract.originalPaymentDay || dayjs(contract.nextPaymentDate).date();
-      if (!contract.originalPaymentDay) {
-        contract.originalPaymentDay = originalDay;
-        logger.debug(`    📅 originalPaymentDay set from nextPaymentDate: ${originalDay}`);
-      }
-
-      // Agar barcha oylar to'langan bo'lmasa, nextPaymentDate yangilash
-      if (nextPaymentMonth <= contract.period) {
-        // ✅ TUZATISH: initialNextPaymentDate dan lastPaidMonth (to'langan oylar soni) oy qo'shish
-        // Misol: initialNextPaymentDate = 2025-07-18, lastPaidMonth = 0 (hech narsa to'lanmadi) → 2025-07-18
-        // Misol: initialNextPaymentDate = 2025-07-18, lastPaidMonth = 5 (5 oy to'landi) → 2025-12-18
-        const nextPaymentDate = dayjs(initialNextPaymentDate)
-          .add(lastPaidMonth, "month")
-          .date(originalDay)
-          .toDate();
-
-        contract.nextPaymentDate = nextPaymentDate;
-
-        logger.debug(`    📅 Next payment month: ${nextPaymentMonth}`);
-        logger.debug(`    📅 nextPaymentDate: ${dayjs(nextPaymentDate).format("YYYY-MM-DD")}`);
+      // Agar oylik to'lovlar yo'q bo'lsa, nextPaymentDate ni o'rnatish
+      if (monthlyPayments.length === 0) {
+        contract.nextPaymentDate = nextPaymentDate; // ✅ Excel'dan kelgan nextPaymentDate
+        logger.debug(`    📅 nextPaymentDate set to: ${dayjs(nextPaymentDate).format("YYYY-MM-DD")}`);
       } else {
-        logger.debug("    ✅ All payments completed, no next payment date");
+        // Eng oxirgi to'langan oyni topish
+        const lastPaidMonth = Math.max(...monthlyPayments.map((p: any) => p.targetMonth || 0));
+        const nextPaymentMonth = lastPaidMonth + 1;
+
+        if (nextPaymentMonth <= contract.period) {
+          const nextDate = dayjs(nextPaymentDate)
+            .add(lastPaidMonth, "month")
+            .toDate();
+          contract.nextPaymentDate = nextDate;
+          logger.debug(`    📅 nextPaymentDate updated to: ${dayjs(nextDate).format("YYYY-MM-DD")}`);
+        }
       }
 
       // Shartnomani saqlash
@@ -463,7 +438,6 @@ class ExcelImportService {
       logger.debug("  ✅ Contract status and nextPaymentDate updated");
     } catch (error) {
       logger.error("  ❌ Error rechecking contract:", error);
-      // Davom etish (xatoni ignor qilish)
     }
   }
 
@@ -718,9 +692,11 @@ class ExcelImportService {
       );
     }
 
-    // ✅ Balance faqat 1 marta yangilanadi (barcha Excel to'lovlar jami)
-    await this.updateBalance(managerId, totalExcelPayments);
-    logger.debug(`  💵 Balance updated: +${totalExcelPayments}$`);
+    // ✅ Balance faqat oylik to'lovlar uchun yangilanadi
+    if (monthlyPayments.length > 0) {
+      await this.updateBalance(managerId, totalExcelPayments);
+      logger.debug(`  💵 Balance updated: +${totalExcelPayments}$`);
+    }
 
     return paymentIds;
 
@@ -818,33 +794,28 @@ class ExcelImportService {
           logger.debug(`    Using Excel value: ${excelTotalPrice}$`);
         }
 
-        // ✅ TUZATISH: initialPaymentDueDate = row[1] dan kun raqamini olish
-        // Excel'da bu column faqat kun raqami (1-31) sifatida saqlanadi, masalan: 4, 10, 18
-        // Bu har oy to'lov qilinadigan kunni bildiradi
+        // ✅ TUZATISH: To'g'ri field mapping
+        // Excel: initialPaymentDueDate = kun raqami (10), nextPaymentDate = to'lov sanasi (10/01/2026)
         const paymentDayFromExcel = row[1] ? parseInt(String(row[1])) : null;
         const nextPaymentDateParsed = this.parseDate(row[2]);
 
-        // ✅ YANGI: originalPaymentDay ni Excel'dan olish (bu asosiy kun!)
+        // originalPaymentDay = initialPaymentDueDate (kun raqami)
+        // initialPaymentDueDate = nextPaymentDate (to'lov sanasi)
         let originalPaymentDay: number;
         let initialPaymentDueDateValue: Date;
 
         if (paymentDayFromExcel && paymentDayFromExcel >= 1 && paymentDayFromExcel <= 31) {
-          // Excel'da kun berilgan - bu har oy to'lanadigan asl kun
           originalPaymentDay = paymentDayFromExcel;
+          initialPaymentDueDateValue = nextPaymentDateParsed; // To'g'ri sana
           
-          // initialPaymentDueDate ni nextPaymentDate oyida, lekin berilgan kun bilan yaratamiz
-          initialPaymentDueDateValue = dayjs(nextPaymentDateParsed)
-            .date(paymentDayFromExcel)
-            .toDate();
-          
-          logger.debug(`  📅 originalPaymentDay from Excel: ${originalPaymentDay}`);
+          logger.debug(`  📅 originalPaymentDay: ${originalPaymentDay}`);
           logger.debug(`  📅 initialPaymentDueDate: ${dayjs(initialPaymentDueDateValue).format('YYYY-MM-DD')}`);
         } else {
-          // Fallback: nextPaymentDate dan kun olish
+          // Fallback
           originalPaymentDay = dayjs(nextPaymentDateParsed).date();
           initialPaymentDueDateValue = nextPaymentDateParsed;
           
-          logger.debug(`  📅 originalPaymentDay fallback from nextPaymentDate: ${originalPaymentDay}`);
+          logger.debug(`  📅 originalPaymentDay fallback: ${originalPaymentDay}`);
           logger.debug(`  📅 initialPaymentDueDate fallback: ${dayjs(initialPaymentDueDateValue).format('YYYY-MM-DD')}`);
         }
 
@@ -992,19 +963,10 @@ class ExcelImportService {
         }
 
         // 6. Boshlang'ich to'lovni yaratish (agar mavjud bo'lsa)
-        // ⚠️ MUHIM: Boshlang'ich to'lov balance ga QO'SHILMAYDI
-        // Chunki totalPrice allaqachon initialPayment ni o'z ichiga oladi
         if (contractData.initialPayment > 0) {
-          // ✅ YANGI: Boshlang'ich to'lov uchun batafsil izoh
-          let initialNoteText = `📊 BOSHLANG'ICH TO'LOV\n`;
-          initialNoteText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-          initialNoteText += `💰 Summa: ${contractData.initialPayment.toFixed(2)}$\n`;
-          initialNoteText += `📦 Shartnoma: ${contractData.productName}\n`;
-          initialNoteText += `📅 Sana: ${dayjs(contractData.startDate).format("DD.MM.YYYY")}\n`;
-          initialNoteText += `💵 Jami narx: ${contractData.totalPrice.toFixed(2)}$\n`;
-          initialNoteText += `📊 Oylik to'lov: ${contractData.monthlyPayment.toFixed(2)}$\n`;
-          initialNoteText += `⏰ Muddat: ${contractData.period} oy\n`;
-          initialNoteText += `\n✅ TO'LANGAN (Excel import)\n`;
+          let initialNoteText = `💰 BOSHLANG'ICH TO'LOV: ${contractData.initialPayment}$\n`;
+          initialNoteText += `📦 ${contractData.productName}\n`;
+          initialNoteText += `📅 ${dayjs(contractData.startDate).format("DD.MM.YYYY")}\n`;
 
           const initialNotes = await Notes.create({
             text: initialNoteText,
@@ -1014,31 +976,25 @@ class ExcelImportService {
 
           const initialPayment = await Payment.create({
             amount: contractData.initialPayment,
-            actualAmount: contractData.initialPayment, // ✅ FIXED
-            date: contractData.startDate,
+            actualAmount: contractData.initialPayment,
+            date: contractData.startDate, // ✅ TUZATISH: startDate ishlatiladi
             isPaid: true,
             paymentType: PaymentType.INITIAL,
             customerId,
             managerId: managerObjectId,
             notes: initialNotes._id,
             status: PaymentStatus.PAID,
-            confirmedAt: contractData.startDate,
+            confirmedAt: contractData.startDate, // ✅ TUZATISH: startDate
             confirmedBy: managerObjectId,
-            targetMonth: 0, // ✅ FIXED: Initial payment = 0 (oy emas)
-            createdAt: contractData.startDate, // ✅ Excel'dagi shartnoma sanasini o'rnatish
-            updatedAt: contractData.startDate, // ✅ Yangilanish sanasini ham o'rnatish
+            targetMonth: 0,
+            createdAt: contractData.startDate,
+            updatedAt: contractData.startDate,
           });
 
           contract.payments.push(initialPayment._id as any);
           await contract.save();
 
-          // ⚠️ TUZATILDI: Balance'ni yangilamaymiz (ikki marta hisoblash oldini olish)
-          // Sabab: totalPrice = initialPayment + (monthlyPayment * period)
-          // Faqat oylik to'lovlar balance ga qo'shiladi
-
-          logger.debug(
-            `  ✓ Initial payment created: ${contractData.initialPayment}$ (NOT added to balance)`
-          );
+          logger.debug(`  ✓ Initial payment created: ${contractData.initialPayment}$ on ${dayjs(contractData.startDate).format('YYYY-MM-DD')}`);
         }
 
         // ✅ YANGI: Contract status va nextPaymentDate tekshirish

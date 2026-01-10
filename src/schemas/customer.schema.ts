@@ -14,6 +14,7 @@ export interface ICustomerEdit {
 }
 
 export interface ICustomer extends IBase {
+  customerId: string; // M0001 formatida
   fullName: string;
   phoneNumber: string;
   address: string;
@@ -54,6 +55,7 @@ const CustomerEditSchema = new Schema<ICustomerEdit>(
 const CustomerSchema = new Schema<ICustomer>(
   {
     ...BaseSchema,
+    customerId: { type: String, unique: true, sparse: true },
     fullName: { type: String, required: true },
     phoneNumber: { type: String },
     address: { type: String },
@@ -90,6 +92,25 @@ CustomerSchema.virtual("contracts", {
   ref: "Contract",
   localField: "_id",
   foreignField: "customer",
+});
+
+// Pre-save hook: customerId avtomatik yaratish
+CustomerSchema.pre("save", async function (next) {
+  if (!this.customerId) {
+    const CustomerModel = this.constructor as any;
+    const lastCustomer = await CustomerModel
+      .findOne({ customerId: { $exists: true, $ne: null } })
+      .sort({ customerId: -1 })
+      .select("customerId");
+
+    if (!lastCustomer?.customerId) {
+      this.customerId = "M0001";
+    } else {
+      const num = parseInt(lastCustomer.customerId.slice(1)) + 1;
+      this.customerId = `M${num.toString().padStart(4, "0")}`;
+    }
+  }
+  next();
 });
 
 const Customer = model<ICustomer>("Customer", CustomerSchema);

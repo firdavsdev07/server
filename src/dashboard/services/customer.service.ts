@@ -171,6 +171,7 @@ class CustomerService {
       },
       {
         $project: {
+          customerId: 1,
           fullName: 1,
           phoneNumber: 1,
           address: 1,
@@ -241,6 +242,7 @@ class CustomerService {
       },
       {
         $project: {
+          customerId: 1,
           fullName: 1,
           phoneNumber: 1,
           address: 1,

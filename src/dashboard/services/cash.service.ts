@@ -31,7 +31,7 @@ class CashService {
       })
         .populate({
           path: "customerId",
-          select: "fullName phoneNumber", // ✅ manager olib tashlandi - alohida managerId dan olinadi
+          select: "customerId fullName phoneNumber",
         })
         .populate("managerId", "firstName lastName")
         .populate("notes", "text")

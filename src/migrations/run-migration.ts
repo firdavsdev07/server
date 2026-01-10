@@ -14,6 +14,7 @@ import * as migration005 from "./005-fix-prepaid-balance";
 import * as migration006 from "./006-create-missing-payments";
 import * as migration007 from "./007-customer-fullname";
 import * as migration008 from "./008-add-reminder-date";
+import * as migration012 from "./012-add-customer-id";
 
 interface Migration {
   name: string;
@@ -57,6 +58,11 @@ const migrations: Migration[] = [
     name: "008-add-reminder-date",
     up: migration008.up,
     down: migration008.down,
+  },
+  {
+    name: "012-add-customer-id",
+    up: migration012.up,
+    down: migration012.down,
   },
 ];
 

@@ -301,7 +301,7 @@ class PaymentService {
       })
         .populate({
           path: "customerId",
-          select: "fullName phoneNumber",
+          select: "customerId fullName phoneNumber",
         })
         .populate({
           path: "notes",
