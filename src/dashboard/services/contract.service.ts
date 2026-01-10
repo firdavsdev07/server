@@ -266,8 +266,8 @@ class ContractService {
       // 🔍 AUDIT LOG: Contract yaratish
       const customerData = customerDoc as any;
       await auditLogService.logContractCreate(
-        contract._id.toString(),
-        customerData._id.toString(),
+        contract.contractId || contract._id.toString(), // ✅ K0025 formatdagi ID
+        customerData.customerId || customerData._id.toString(), // ✅ M0016 formatdagi ID
         customerData.fullName,
         data.productName,
         data.totalPrice,

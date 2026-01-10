@@ -682,6 +682,9 @@ class PaymentService {
             { field: "confirmedAt", oldValue: null, newValue: payment.confirmedAt }
           ],
           metadata: {
+            paymentId: payment.paymentId, // ✅ To'lov ID
+            contractId: contract.contractId, // ✅ Shartnoma ID
+            customerId: customer.customerId, // ✅ Mijoz ID
             paymentType: "monthly",
             paymentStatus: payment.status,
             amount: payment.actualAmount || payment.amount,
